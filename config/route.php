@@ -1,0 +1,10 @@
+use Webman\Route;
+Route::get('/api/dashboard', [app\controller\PropertyController::class, 'getDashboardData']);
+Route::get('/api/spaces', [app\controller\PropertyController::class, 'getSpaces']);
+Route::post('/api/spaces/add', [app\controller\PropertyController::class, 'addSpace']);
+Route::get('/api/contracts', [app\controller\PropertyController::class, 'getContracts']);
+Route::post('/api/contracts/add', [app\controller\PropertyController::class, 'addContract']);
+Route::get('/api/meters', [app\controller\PropertyController::class, 'getMeters']);
+Route::post('/api/meters/record', [app\controller\PropertyController::class, 'recordMeter']);
+Route::get('/api/receivables', [app\controller\PropertyController::class, 'getReceivables']);
+Route::post('/api/receivables/pay', [app\controller\PropertyController::class, 'payBill']);
