@@ -32,7 +32,14 @@ class UploadController
                 ]);
             }
 
-            return json(['code' => 200, 'msg' => '文件已安全归档', 'url' => $url]);
+            // 核心修复：增加 data 层级，精准对齐前端 res.data.url 的读取预期
+            return json([
+                'code' => 200, 
+                'msg'  => '文件已安全归档', 
+                'data' => [
+                    'url' => $url
+                ]
+            ]);
         }
         
         return json(['code' => 400, 'msg' => '非法的文件传输请求']);

@@ -1,21 +1,38 @@
 <?php
 use Webman\Route;
+use support\Response;
 
-Route::options('[{path:.+}]', function (){
-    return response('');
+// 1. 终极防线：全局 OPTIONS 请求拦截与跨域头强力下发
+Route::options('[{path:.+}]', function () {
+    return new Response(204, [
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-Requested-With, token',
+        'Access-Control-Max-Age' => '86400',
+    ]);
 });
 
 Route::post('/api/login', [app\controller\LoginController::class, 'login']);
 Route::post('/api/tenant/login', [app\controller\LoginController::class, 'tenantLogin']);
 
 Route::group('/api', function () {
+    
+    // --- 动态权限与系统模块 ---
+    Route::get('/system/getMyMenus', [app\controller\SystemController::class, 'getMyMenus']);
+
     Route::get('/dashboard', [app\controller\DashboardController::class, 'index']);
     
     // 系统控制与数据脱密审计
     Route::get('/system/roles/list', [app\controller\SystemController::class, 'roleList']);
     Route::post('/system/roles/add', [app\controller\SystemController::class, 'roleAdd']);
+    Route::post('/system/roles/update', [app\controller\SystemController::class, 'roleUpdate']);
+    Route::post('/system/roles/delete', [app\controller\SystemController::class, 'roleDelete']);
+    
     Route::get('/system/admins/list', [app\controller\SystemController::class, 'adminList']);
     Route::post('/system/admins/add', [app\controller\SystemController::class, 'adminAdd']);
+    Route::post('/system/admins/update', [app\controller\SystemController::class, 'adminUpdate']); // 新增：子账号修改
+    Route::post('/system/admins/delete', [app\controller\SystemController::class, 'adminDelete']); // 新增：子账号注销
+    
     Route::get('/export/download', [app\controller\ExportController::class, 'download']);
     Route::get('/system/audit/logs', [app\controller\ExportController::class, 'auditLogs']);
     
@@ -76,11 +93,19 @@ Route::group('/api', function () {
     Route::post('/patrol/checkin', [app\controller\PatrolController::class, 'checkin']);
     Route::get('/patrol/records', [app\controller\PatrolController::class, 'records']);
     
-    // 工单服务与基层人员管理
+    // 核心修复：工单服务与基层人员管理
     Route::get('/services/work-orders/list', [app\controller\WorkOrderController::class, 'list']);
+    Route::get('/services/workOrdersList', [app\controller\WorkOrderController::class, 'list']);
+    
     Route::post('/services/work-orders/assign', [app\controller\WorkOrderController::class, 'assign']);
+    Route::post('/services/workOrdersAssign', [app\controller\WorkOrderController::class, 'assign']);
+    
     Route::post('/services/work-orders/complete', [app\controller\WorkOrderController::class, 'complete']);
+    Route::post('/services/workOrdersComplete', [app\controller\WorkOrderController::class, 'complete']);
+    
     Route::post('/services/work-orders/verify', [app\controller\WorkOrderController::class, 'verify']);
+    Route::post('/services/workOrdersVerify', [app\controller\WorkOrderController::class, 'verify']);
+
     Route::get('/services/staff/list', [app\controller\ServiceStaffController::class, 'list']);
     Route::post('/services/staff/add', [app\controller\ServiceStaffController::class, 'add']);
     Route::post('/services/staff/update', [app\controller\ServiceStaffController::class, 'update']);
@@ -91,3 +116,13 @@ Route::group('/api', function () {
 })->middleware([
     app\middleware\AuthMiddleware::class
 ]);
+
+// 2. 终极防线：全局 404 兜底路由
+Route::fallback(function (\support\Request $request) {
+    return new Response(404, [
+        'Content-Type' => 'application/json',
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-Requested-With, token'
+    ], json_encode(['code' => 404, 'msg' => '致命错误：后端接口地址不存在或拼写错误 -> ' . $request->path()]));
+});

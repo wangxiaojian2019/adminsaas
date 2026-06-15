@@ -37,6 +37,8 @@ class ContractController
             'end_date' => $request->post('end_date'),
             'monthly_rent' => $request->post('monthly_rent', 0),
             'property_fee' => $request->post('property_fee', 0),
+            // 核心新增：写入交租周期（默认3个月即季付）
+            'payment_cycle' => $request->post('payment_cycle', 3), 
             'vehicle_info' => $request->post('vehicle_info', ''),
             'deposit' => $request->post('deposit', 0),
             'status' => 1,
@@ -64,9 +66,6 @@ class ContractController
         }
     }
 
-    /**
-     * 核心重构：退租清算处理引擎
-     */
     public function terminate(Request $request)
     {
         $id = $request->post('id');

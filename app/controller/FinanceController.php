@@ -12,6 +12,8 @@ class FinanceController
             ->leftJoin('enterprises', 'receivables.enterprise_id', '=', 'enterprises.id')
             ->leftJoin('spaces', 'receivables.space_id', '=', 'spaces.id')
             ->select('receivables.*', 'enterprises.name as enterprise_name', 'spaces.building_name', 'spaces.room_number')
+            // 核心重构：利用 CASE WHEN 强制把状态 2 (待审核) 的记录提到第一行，防遗漏
+            ->orderByRaw("CASE WHEN receivables.is_paid = 2 THEN 0 ELSE 1 END")
             ->orderBy('receivables.id', 'desc')
             ->get();
             
@@ -21,11 +23,25 @@ class FinanceController
     public function pay(Request $request)
     {
         $id = $request->post('id');
+        $action = $request->post('action', 'approve'); // 接收前端传来的动作：approve/reject/direct
+
+        // 驳回逻辑：将单据状态打回 0，清空付款方式和回执单，让租户重新传
+        if ($action === 'reject') {
+            Db::table('receivables')->where('id', $id)->update([
+                'is_paid' => 0,
+                'payment_method' => null,
+                'receipt_url' => null
+            ]);
+            return json(['code' => 200, 'msg' => '凭证已驳回，已要求租户重新打款']);
+        }
+
+        // 审核通过 / 线下强制核销逻辑
         Db::table('receivables')->where('id', $id)->update([
             'is_paid' => 1,
             'paid_time' => date('Y-m-d H:i:s')
         ]);
-        return json(['code' => 200, 'msg' => 'success']);
+        
+        return json(['code' => 200, 'msg' => '账款已确认到账，核销成功']);
     }
 
     public function recordMeter(Request $request)

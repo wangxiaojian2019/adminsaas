@@ -98,24 +98,42 @@ class TenantPortalController
     }
 
     /**
-     * 移动端模拟支付收银台回调接口
+     * 移动端实际支付/转账凭证提交回调接口
      */
     public function payBill(Request $request)
     {
         $enterpriseId = $request->enterprise_id;
         $billId = $request->post('id');
+        $paymentMethod = $request->post('payment_method');
+        $receiptUrl = $request->post('receipt_url', '');
 
         $bill = Db::table('receivables')->where('id', $billId)->where('enterprise_id', $enterpriseId)->first();
         
-        if (!$bill) return json(['code' => 400, 'msg' => '账单不存在或无权操作']);
-        if ($bill->is_paid == 1) return json(['code' => 400, 'msg' => '账单已结清，无需重复支付']);
+        if (!$bill) {
+            return json(['code' => 400, 'msg' => '账单不存在或无权操作']);
+        }
+        if ($bill->is_paid == 1) {
+            return json(['code' => 400, 'msg' => '账单已结清，无需重复支付']);
+        }
+        if ($bill->is_paid == 2) {
+            return json(['code' => 400, 'msg' => '账单凭证已在财务审核中，请勿重复提交']);
+        }
 
-        // 模拟支付成功，核销账单
-        Db::table('receivables')->where('id', $billId)->update([
-            'is_paid' => 1,
-            'paid_time' => date('Y-m-d H:i:s')
-        ]);
+        $updateData = [
+            'payment_method' => $paymentMethod,
+            'receipt_url' => $receiptUrl
+        ];
 
-        return json(['code' => 200, 'msg' => '支付成功']);
+        // 核心状态机流转：对公转账进入待审核状态，线上支付直通核销状态
+        if ($paymentMethod === 'transfer') {
+            $updateData['is_paid'] = 2; 
+        } else {
+            $updateData['is_paid'] = 1; 
+            $updateData['paid_time'] = date('Y-m-d H:i:s');
+        }
+
+        Db::table('receivables')->where('id', $billId)->update($updateData);
+
+        return json(['code' => 200, 'msg' => '操作成功']);
     }
 }

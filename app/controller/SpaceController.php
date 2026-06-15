@@ -8,7 +8,40 @@ class SpaceController
 {
     public function list(Request $request)
     {
-        $list = Db::table('spaces')->orderBy('building_name')->orderBy('floor')->orderBy('room_number')->get();
+        $list = Db::table('spaces')
+            ->leftJoin('contracts', function($join) {
+                $join->on('spaces.id', '=', 'contracts.space_id')
+                     ->where('contracts.status', '=', 1);
+            })
+            ->leftJoin('enterprises', 'contracts.enterprise_id', '=', 'enterprises.id')
+            ->select(
+                'spaces.*', 
+                'enterprises.name as real_enterprise_name', 
+                'enterprises.contact_person', 
+                'enterprises.phone',
+                'enterprises.industry',
+                'contracts.contract_no',
+                'contracts.start_date',
+                'contracts.end_date',
+                'contracts.monthly_rent',
+                'contracts.property_fee'
+            )
+            ->orderBy('spaces.building_name')
+            ->orderBy('spaces.floor')
+            ->orderBy('spaces.room_number')
+            ->get();
+            
+        foreach ($list as $key => $item) {
+            if ($item->real_enterprise_name) {
+                $list[$key]->enterprise_name = $item->real_enterprise_name;
+                if ($item->area > 0 && $item->monthly_rent > 0) {
+                    $list[$key]->unit_price = number_format(($item->monthly_rent / $item->area) / 30, 2);
+                } else {
+                    $list[$key]->unit_price = '0.00';
+                }
+            }
+        }
+
         return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
 
@@ -19,7 +52,7 @@ class SpaceController
             'floor' => $request->post('floor'),
             'room_number' => $request->post('room_number'),
             'area' => $request->post('area'),
-            'status' => 0, // 新录入默认空置
+            'status' => 0,
             'created_at' => date('Y-m-d H:i:s')
         ]);
         return json(['code' => 200, 'msg' => 'success']);
@@ -28,12 +61,25 @@ class SpaceController
     public function update(Request $request)
     {
         $id = $request->post('id');
+
+        // 核心重构：绿灯区 - 企业档案的无感快捷更新分支
+        if ($request->post('is_enterprise_update') == 1) {
+            $contract = Db::table('contracts')->where('space_id', $id)->where('status', 1)->first();
+            if ($contract) {
+                Db::table('enterprises')->where('id', $contract->enterprise_id)->update([
+                    'contact_person' => $request->post('contact_person'),
+                    'phone' => $request->post('phone'),
+                    'industry' => $request->post('industry')
+                ]);
+            }
+            return json(['code' => 200, 'msg' => '企业联络档案已安全更新']);
+        }
+
+        // 常规的物理空间参数更新分支
         $data = [
             'room_number' => $request->post('room_number'),
             'area' => $request->post('area')
         ];
-        
-        // 核心修改：接收前端传来的物理工况状态
         if ($request->post('status') !== null) {
             $data['status'] = $request->post('status');
         }
@@ -48,7 +94,6 @@ class SpaceController
         return json(['code' => 200, 'msg' => 'success']);
     }
 
-    // 快捷工况流转专用接口
     public function updateStatus(Request $request)
     {
         $id = $request->post('id');
@@ -57,7 +102,6 @@ class SpaceController
         return json(['code' => 200, 'msg' => 'success']);
     }
     
-    // 预留前端级联选择器树状接口
     public function tree(Request $request) {
         return json(['code' => 200, 'msg' => 'success', 'data' => []]);
     }
