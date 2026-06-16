@@ -2,24 +2,20 @@
   <el-container class="layout-container">
     <el-aside width="220px" class="aside">
       <div class="logo">高新科技产业园</div>
-      
-      <el-menu 
-        :default-active="$route.path" 
-        router 
-        background-color="#2c3e50" 
-        text-color="#bfcbd9" 
-        active-text-color="#409EFF"
-      >
-        <template v-for="item in menuList" :key="item.id">
-          <el-menu-item :index="item.path">
-            <el-icon v-if="item.icon">
-              <component :is="item.icon" />
-            </el-icon>
-            <span>{{ item.name }}</span>
-          </el-menu-item>
-        </template>
+      <el-menu :default-active="$route.path" router background-color="#2c3e50" text-color="#bfcbd9" active-text-color="#409EFF">
+        <el-menu-item index="/dashboard"><el-icon><Odometer /></el-icon><span>1. 运营数据指挥舱</span></el-menu-item>
+        <el-menu-item index="/system"><el-icon><Setting /></el-icon><span>2. 系统与权限控制</span></el-menu-item>
+        <el-menu-item index="/buildings"><el-icon><OfficeBuilding /></el-icon><span>3. 大厦与资产大盘</span></el-menu-item>
+        <el-menu-item index="/spaces"><el-icon><School /></el-icon><span>4. 房源资产精细库</span></el-menu-item>
+        <el-menu-item index="/vehicles"><el-icon><Van /></el-icon><span>5. 车位月卡与收费</span></el-menu-item>
+        <el-menu-item index="/leads"><el-icon><User /></el-icon><span>6. 招商与线索中心</span></el-menu-item>
+        <el-menu-item index="/enterprises"><el-icon><Memo /></el-icon><span>7. 企业户籍档案</span></el-menu-item>
+        <el-menu-item index="/contracts"><el-icon><Document /></el-icon><span>8. 租务与合同中心</span></el-menu-item>
+        <el-menu-item index="/finance"><el-icon><Money /></el-icon><span>9. 业财一体化中心</span></el-menu-item>
+        <el-menu-item index="/patrol"><el-icon><Aim /></el-icon><span>10. 智能安防巡检</span></el-menu-item>
+        <el-menu-item index="/services"><el-icon><Service /></el-icon><span>11. 基层服务人员管理</span></el-menu-item>
+        <el-menu-item index="/reports"><el-icon><DataLine /></el-icon><span>12. 报表与 BI 中心</span></el-menu-item>
       </el-menu>
-
     </el-aside>
     <el-container>
       <el-header class="header">
@@ -50,9 +46,6 @@ import request from '../../utils/request'
 const router = useRouter()
 const userInfo = ref({})
 
-// 动态权限菜单容器
-const menuList = ref([])
-
 let pollTimer = null
 let notifInstance = null
 let lastPendingCount = 0
@@ -63,23 +56,12 @@ const handleLogout = () => {
   router.push('/login')
 }
 
-// 核心功能：向总线拉取属于该角色的物理菜单节点
-const fetchMenus = async () => {
-  try {
-    const res = await request.get('/api/system/getMyMenus')
-    if (res.code === 200) {
-      menuList.value = res.data
-    }
-  } catch (e) {
-    console.error('动态权限拉取链路熔断')
-  }
-}
-
-// 维持原有的高优全局静默探测与穿透引擎
+// 核心探测引擎
 const checkGlobalNotifications = async () => {
   try {
     const res = await request.get('/api/finance/receivables/list', { timeout: 8000 })
     if (res.code === 200) {
+      // 核心修复：1. 拆除脆弱的本地鉴权死锁；2. 强制 Number 转换防御 PHP 弱类型字符串 "2"
       const pendingBills = res.data.filter(item => Number(item.is_paid) === 2)
       const pendingCount = pendingBills.length
 
@@ -96,6 +78,7 @@ const checkGlobalNotifications = async () => {
           customClass: 'clickable-notif',
           onClick: () => {
             const targetId = pendingBills[0].id
+            // 路由强穿透
             router.push({
               path: '/finance',
               query: { review_bill_id: targetId, _t: Date.now() }
@@ -121,11 +104,7 @@ onMounted(() => {
   if (userStr) {
     userInfo.value = JSON.parse(userStr)
   }
-  
-  // 启动权限拉取
-  fetchMenus()
-  
-  // 启动心跳引擎
+  // 去除各种拦截判断，只要挂载，立刻启动首次探测与心跳轮询
   checkGlobalNotifications()
   pollTimer = setInterval(checkGlobalNotifications, 15000)
 })

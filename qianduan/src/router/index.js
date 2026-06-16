@@ -30,7 +30,7 @@ const routes = [
 
 const router = createRouter({ history: createWebHistory(), routes })
 
-// 核心重构：采用 Vue 官方推荐的 return 中断法，恢复独立防线
+// 核心重构：弃用 next，采用 Vue 官方推荐的 return 中断法
 router.beforeEach((to, from) => {
   document.title = to.meta.title ? `${to.meta.title} - 智慧园区SaaS` : '智慧园区SaaS'
   const path = to.path

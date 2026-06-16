@@ -1,133 +1,142 @@
 <template>
-  <div class="h5-worker-main">
-    <div class="top-nav">
-      <div class="user-greet">外勤终端：{{ workerName }}</div>
-      <div class="nav-actions">
-        <el-button link type="primary" size="small" @click="pwdDialogVisible = true">修改密码</el-button>
-        <el-divider direction="vertical" />
-        <el-button link type="danger" size="small" @click="logout(false)">安全退出</el-button>
+  <div class="mobile-container" v-if="userInfo.id">
+    <div class="mobile-header">
+      <div class="user-greeting">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          {{ userInfo.real_name || '员工' }} 
+          <el-tag size="small" type="warning" effect="dark" style="border-radius: 12px; border: none;">
+            {{ userInfo.position || '外勤人员' }}
+          </el-tag>
+        </h3>
+        <p><el-icon><Iphone /></el-icon> 账号: {{ userInfo.username }}</p>
       </div>
+      <el-button v-if="activeTab === 'orders'" type="danger" link @click="handleLogout" style="color: #ffcccc;">交班退出</el-button>
     </div>
 
-    <el-tabs v-model="activeTab" class="mobile-tabs" stretch>
-      <el-tab-pane label="指派工单作业" name="tasks">
-        <div class="pane-content" v-loading="tasksLoading">
-          <el-empty v-if="tasks.length === 0" description="暂无指派给您的工单任务" :image-size="80" />
-          
-          <div v-for="task in tasks" :key="task.id" class="task-card">
-            <div class="card-header">
-              <span class="task-id">工单 #{{ task.id }}</span>
-              <el-tag size="small" :type="getStatusType(task.status)" effect="dark">
-                {{ getStatusLabel(task.status) }}
-              </el-tag>
-            </div>
-            <div class="task-body">
-              <div class="task-title">{{ task.title }}</div>
-              <div class="task-desc">{{ parseDesc(task.description).text }}</div>
-              <el-image 
-                v-if="parseDesc(task.description).image"
-                class="task-img"
-                :src="getFullImgUrl(parseDesc(task.description).image)"
-                :preview-src-list="[getFullImgUrl(parseDesc(task.description).image)]"
-                fit="cover"
-              />
-              <div class="task-meta">报修人: {{ task.reporter_name }} | 下发于: {{ task.created_at }}</div>
-            </div>
-            <div class="card-footer" v-if="task.status === 2">
-              <el-button type="primary" size="default" style="width: 100%; border-radius: 8px;" @click="openCompleteDialog(task)">
-                开始办理完工上报
-              </el-button>
-            </div>
-          </div>
+    <div v-show="activeTab === 'orders'" class="h5-content">
+      <div class="responsibility-card">
+        <div class="resp-title"><el-icon><List /></el-icon> 我的岗位职责</div>
+        <div class="resp-content">
+          {{ userInfo.responsibility || '系统暂未配置您的详细岗位职责。' }}
         </div>
-      </el-tab-pane>
+      </div>
 
-      <el-tab-pane label="网格巡更打卡" name="patrol">
-        <div class="pane-content" v-loading="pointsLoading">
-          <el-empty v-if="points.length === 0" description="园区尚未配置任何巡检网格" :image-size="80" />
+      <div class="stats-panel">
+        <div class="stat-box">
+          <div class="stat-num text-danger">{{ pendingOrders.length }}</div>
+          <div class="stat-label">中控室派单待办</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num text-success">{{ completedOrders.length }}</div>
+          <div class="stat-label">今日已完工(件)</div>
+        </div>
+      </div>
+
+      <div class="action-grid">
+        <div class="action-btn" @click="scanCode">
+          <el-icon class="action-icon" :style="{ color: actionMeta.color }">
+            <Aim v-if="actionMeta.iconName === 'Aim'" />
+            <Brush v-else-if="actionMeta.iconName === 'Brush'" />
+            <Setting v-else-if="actionMeta.iconName === 'Setting'" />
+            <FullScreen v-else />
+          </el-icon>
+          <span>{{ actionMeta.btnText }}</span>
+        </div>
+        <div class="action-btn" @click="fetchWorkOrders">
+          <el-icon class="action-icon" style="color: #409eff;"><Refresh /></el-icon>
+          <span>刷新调度指令</span>
+        </div>
+      </div>
+
+      <div class="task-list">
+        <div class="list-title">调度室下发任务列表</div>
+        <el-empty v-if="pendingOrders.length === 0" description="暂无派发指令" :image-size="80" />
+
+        <div v-for="order in pendingOrders" :key="order.id" class="task-card">
+          <div class="task-header">
+            <span class="task-title">{{ order.title }}</span>
+            <el-tag size="small" type="danger" effect="dark">调度加急</el-tag>
+          </div>
           
-          <div v-for="point in points" :key="point.id" class="patrol-point-card">
-            <div class="point-info">
-              <el-icon class="point-icon"><Location /></el-icon>
-              <div class="point-detail">
-                <div class="point-name">{{ point.location }}</div>
-                <div class="point-id">网格防区编号: {{ point.id }}</div>
-              </div>
+          <div class="task-body">
+            <p><strong>异常描述：</strong>{{ parseDesc(order.description).text }}</p>
+            <div v-if="parseDesc(order.description).image" class="image-preview-box">
+              <span style="font-size: 12px; color: #909399; margin-bottom: 5px; display: block;">现场证物照片：</span>
+              <el-image 
+                style="width: 100px; height: 100px; border-radius: 6px; border: 1px solid #ebeef5;"
+                :src="parseDesc(order.description).image"
+                :preview-src-list="[parseDesc(order.description).image]"
+                fit="cover"
+                preview-teleported
+              />
             </div>
-            <el-button type="success" size="default" @click="openPatrolDialog(point)">
-              现场打卡
+            <el-divider border-style="dashed" style="margin: 10px 0" />
+            <p><strong>指令发起：</strong>{{ order.reporter_name }}</p>
+            <p><strong>下发时间：</strong>{{ new Date(order.created_at).toLocaleString() }}</p>
+          </div>
+
+          <div class="task-footer">
+            <el-button type="success" size="large" class="full-btn" :loading="actionLoading" @click="completeOrder(order.id)">
+              确认现场处置完毕，打卡回传
             </el-button>
           </div>
         </div>
-      </el-tab-pane>
-    </el-tabs>
+      </div>
+    </div>
 
-    <el-dialog v-model="completeVisible" title="完工情况反馈核验" width="92%" center append-to-body @close="completeForm.image_url = ''">
-      <el-form label-position="top">
-        <el-form-item label="修复进展情况说明">
-          <el-input v-model="completeForm.reply_remarks" type="textarea" :rows="3" placeholder="请详述现场修复手段..." />
+    <div v-show="activeTab === 'profile'" class="h5-content profile-wrapper">
+      <div class="profile-header">
+        <div class="avatar"><el-icon><UserFilled /></el-icon></div>
+        <div class="info">
+          <div class="name">{{ userInfo.real_name }}</div>
+          <div class="position"><el-tag size="small" effect="dark" type="warning">{{ userInfo.position }}</el-tag></div>
+        </div>
+      </div>
+      <div class="profile-menu">
+        <div class="menu-item" @click="openPwdDialog(false)">
+          <el-icon><Lock /></el-icon> <span>安全设置 (修改密码)</span> <el-icon class="arrow"><ArrowRight /></el-icon>
+        </div>
+        <div class="menu-item text-danger" @click="handleLogout">
+          <el-icon><SwitchButton /></el-icon> <span>安全退出登录</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom-tabbar">
+      <div :class="['tab-item', { active: activeTab === 'orders' }]" @click="activeTab = 'orders'">
+        <el-icon><List /></el-icon><span>工单大厅</span>
+      </div>
+      <div :class="['tab-item', { active: activeTab === 'profile' }]" @click="activeTab = 'profile'">
+        <el-icon><User /></el-icon><span>个人中心</span>
+      </div>
+    </div>
+
+    <el-dialog 
+      v-model="pwdDialogVisible" 
+      :title="isForcedReset ? '安全警告：请重置初始密码' : '修改登录密码'" 
+      width="90%" 
+      :show-close="!isForcedReset" 
+      :close-on-click-modal="!isForcedReset" 
+      :close-on-press-escape="!isForcedReset"
+      top="20vh"
+      @close="handleDialogClose"
+    >
+      <div v-if="isForcedReset" class="force-tips">
+        系统检测到您仍在使用初始密码，为保障数据安全，必须修改后方可继续执行作业。
+      </div>
+      <el-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-width="0" size="large">
+        <el-form-item prop="old_password">
+          <el-input v-model="pwdForm.old_password" type="password" placeholder="请输入原密码" show-password />
         </el-form-item>
-        <el-form-item label="修复后现场实况照片">
-          <el-upload class="cert-uploader" action="http://47.120.52.65:8787/api/upload" :headers="uploadHeaders" :show-file-list="false" :on-success="handleTaskUpload">
-            <img v-if="completeForm.image_url" :src="getFullImgUrl(completeForm.image_url)" class="preview-img" />
-            <div v-else class="upload-trigger">
-              <el-icon class="plus-icon"><Camera /></el-icon>
-              <div>调起手机相机拍照存证</div>
-            </div>
-          </el-upload>
+        <el-form-item prop="new_password">
+          <el-input v-model="pwdForm.new_password" type="password" placeholder="请输入新密码" show-password />
         </el-form-item>
       </el-form>
       <template #footer>
-        <div style="display: flex; gap: 10px;">
-          <el-button @click="completeVisible = false" style="flex:1;">取消</el-button>
-          <el-button type="primary" :loading="submitLoading" @click="submitComplete" style="flex:2;">确认完工推单</el-button>
-        </div>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="patrolVisible" title="防区网格实地环境勘察" width="92%" center append-to-body @close="patrolForm.image_url = ''">
-      <el-form label-position="top">
-        <el-form-item label="工况安全性评定">
-          <el-radio-group v-model="patrolForm.status" style="width: 100%;">
-            <el-radio-button :label="1">安全正常</el-radio-button>
-            <el-radio-button :label="0">存在风险隐患</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="工况/异常备注备注">
-          <el-input v-model="patrolForm.remarks" type="textarea" :rows="2" placeholder="正常无需填写，存在异常请详述..." />
-        </el-form-item>
-        <el-form-item label="现场实况拍照">
-          <el-upload class="cert-uploader" action="http://47.120.52.65:8787/api/upload" :headers="uploadHeaders" :show-file-list="false" :on-success="handlePatrolUpload">
-            <img v-if="patrolForm.image_url" :src="getFullImgUrl(patrolForm.image_url)" class="preview-img" />
-            <div v-else class="upload-trigger">
-              <el-icon class="plus-icon"><Camera /></el-icon>
-              <div>调起手机相机拍摄防区实况</div>
-            </div>
-          </el-upload>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <div style="display: flex; gap: 10px;">
-          <el-button @click="patrolVisible = false" style="flex:1;">取消</el-button>
-          <el-button type="success" :loading="submitLoading" @click="submitPatrol" style="flex:2;">物理打卡存证</el-button>
-        </div>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="pwdDialogVisible" title="修改外勤安全终端密码" width="92%" center top="15vh" append-to-body @close="pwdFormRef?.resetFields()">
-      <el-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-position="top">
-        <el-form-item label="当前密码" prop="old_password">
-          <el-input v-model="pwdForm.old_password" type="password" show-password placeholder="请输入当前密码 (默认 123456)" />
-        </el-form-item>
-        <el-form-item label="设置全新密码" prop="new_password">
-          <el-input v-model="pwdForm.new_password" type="password" show-password placeholder="请输入长度不小于6位的新密码" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <div style="display: flex; gap: 10px;">
-          <el-button @click="pwdDialogVisible = false" style="flex: 1;">取消</el-button>
-          <el-button type="primary" :loading="pwdLoading" @click="submitPwd" style="flex: 1;">保存并退出</el-button>
-        </div>
+        <el-button v-if="!isForcedReset" @click="pwdDialogVisible = false">取消</el-button>
+        <el-button type="primary" size="large" style="width: isForcedReset ? '100%' : 'auto'; letter-spacing: 2px;" :loading="submitLoading" @click="submitPwd">
+          确认安全升级
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -137,186 +146,182 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Iphone, List, Aim, Brush, Setting, FullScreen, Refresh, UserFilled, Lock, SwitchButton, ArrowRight, User, Location, Camera } from '@element-plus/icons-vue'
 import request from '../../../utils/request'
 
 const router = useRouter()
-const activeTab = ref('tasks')
-const workerName = ref('')
-
-const tasks = ref([]); const tasksLoading = ref(false)
-const points = ref([]); const pointsLoading = ref(false)
-const submitLoading = ref(false)
-
-const completeVisible = ref(false); const currentTask = ref({})
-const completeForm = reactive({ reply_remarks: '', image_url: '' })
-
-const patrolVisible = ref(false); const currentPoint = ref({})
-const patrolForm = reactive({ status: 1, remarks: '', image_url: '' })
+const userInfo = ref({})
+const rawOrders = ref([])
+const activeTab = ref('orders')
+const actionLoading = ref(false)
 
 const pwdDialogVisible = ref(false)
+const isForcedReset = ref(false)
+const submitLoading = ref(false)
 const pwdFormRef = ref(null)
-const pwdLoading = ref(false)
-const pwdForm = reactive({ old_password: '', new_password: '' })
+const pwdForm = reactive({ id: '', old_password: '', new_password: '' })
 const pwdRules = {
-  old_password: [{ required: true, message: '原密码必须填写验证', trigger: 'blur' }],
-  new_password: [{ required: true, message: '新安全密码不可为空', trigger: 'blur' }, { min: 6, message: '为了系统审计安全，密码长度不能小于6位', trigger: 'blur' }]
+  old_password: [{ required: true, message: '原密码必填', trigger: 'blur' }],
+  new_password: [{ required: true, message: '新密码必填', trigger: 'blur' }, { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }]
 }
 
-// 采用 saas_token 头以确保上传接口防报 401
-const uploadHeaders = computed(() => ({ 'Authorization': `Bearer ${localStorage.getItem('saas_token')}` }))
+const pendingOrders = computed(() => {
+  if (!userInfo.value.id) return []
+  return rawOrders.value.filter(o => o.status === 2 && o.handler_id === userInfo.value.id)
+})
+const completedOrders = computed(() => {
+  if (!userInfo.value.id) return []
+  return rawOrders.value.filter(o => o.status > 2 && o.handler_id === userInfo.value.id)
+})
 
-const initWorkerInfo = () => {
-  // 核心：彻底移除组件内的重定向拦截，不干预 router/index.js 的底层调度
-  const infoStr = localStorage.getItem('worker_info')
-  if (infoStr) {
-    const info = JSON.parse(infoStr)
-    workerName.value = info.real_name || info.username || '园区作业专员'
-  } else {
-    workerName.value = '园区作业专员'
-  }
-}
+const actionMeta = computed(() => {
+  const pos = userInfo.value.position || ''
+  if (pos.includes('安保')) return { btnText: '防区安全巡检打卡', iconName: 'Aim', color: '#f56c6c' }
+  else if (pos.includes('保洁')) return { btnText: '卫生绿化清理打卡', iconName: 'Brush', color: '#67c23a' }
+  else if (pos.includes('维修') || pos.includes('工程')) return { btnText: '设备维保扫码打卡', iconName: 'Setting', color: '#e6a23c' }
+  else return { btnText: '现场作业扫码', iconName: 'FullScreen', color: '#409eff' }
+})
 
 const parseDesc = (desc) => {
   if (!desc) return { text: '', image: '' }
   const match = desc.match(/【现场照片证物】:\s*(http.*)/)
-  return match ? { text: desc.replace(match[0], '').trim(), image: match[1] } : { text: desc, image: '' }
+  if (match) return { text: desc.replace(match[0], '').trim(), image: match[1] }
+  return { text: desc, image: '' }
 }
 
-const getFullImgUrl = (url) => url.startsWith('http') ? url : `http://47.120.52.65:8787${url}`
-
-const fetchTasks = async () => {
-  tasksLoading.value = true
+const fetchWorkOrders = async () => {
   try {
-    const res = await request.get('/api/worker/tasks')
-    if (res.code === 200) tasks.value = res.data
-  } finally { tasksLoading.value = false }
+    const res = await request.get('/api/services/work-orders/list')
+    if (res.code === 200) rawOrders.value = res.data
+  } catch (e) {
+  }
 }
 
-const fetchPoints = async () => {
-  pointsLoading.value = true
+const completeOrder = async (orderId) => {
+  actionLoading.value = true
   try {
-    const res = await request.get('/api/worker/patrol/points')
-    if (res.code === 200) points.value = res.data
-  } finally { pointsLoading.value = false }
+    const res = await request.post('/api/services/work-orders/verify', { id: orderId })
+    if (res.code === 200) {
+      ElMessage.success('打卡成功！现场数据已实时回传中控室。')
+      fetchWorkOrders()
+    }
+  } finally { actionLoading.value = false }
 }
 
-const openCompleteDialog = (task) => {
-  currentTask.value = task
-  completeForm.reply_remarks = ''
-  completeForm.image_url = ''
-  completeVisible.value = true
+const scanCode = () => ElMessage.warning('调用摄像头功能需嵌入APP或小程序内运行')
+
+const handleDialogClose = () => {
+  if (pwdFormRef.value) pwdFormRef.value.resetFields()
 }
 
-const handleTaskUpload = (res) => {
-  if (res.code === 200) { completeForm.image_url = res.data.url; ElMessage.success('完工照片解析成功') }
-}
-
-const submitComplete = async () => {
-  submitLoading.value = true
-  try {
-    const res = await request.post('/api/worker/tasks/complete', {
-      id: currentTask.value.id,
-      reply_remarks: completeForm.reply_remarks,
-      image_url: completeForm.image_url
-    })
-    if (res.code === 200) { ElMessage.success(res.msg); completeVisible.value = false; fetchTasks() }
-  } finally { submitLoading.value = false }
-}
-
-const openPatrolDialog = (point) => {
-  currentPoint.value = point
-  patrolForm.status = 1
-  patrolForm.remarks = ''
-  patrolForm.image_url = ''
-  patrolVisible.value = true
-}
-
-const handlePatrolUpload = (res) => {
-  if (res.code === 200) { patrolForm.image_url = res.data.url; ElMessage.success('防区照片拍照完成') }
-}
-
-const submitPatrol = async () => {
-  submitLoading.value = true
-  try {
-    const res = await request.post('/api/worker/patrol/submit', {
-      point_id: currentPoint.value.id,
-      status: patrolForm.status,
-      remarks: patrolForm.remarks,
-      image_url: patrolForm.image_url
-    })
-    if (res.code === 200) { ElMessage.success(res.msg); patrolVisible.value = false; }
-  } finally { submitLoading.value = false }
+const openPwdDialog = (forced = false) => {
+  isForcedReset.value = forced
+  pwdForm.id = userInfo.value.id || ''
+  pwdForm.old_password = ''
+  pwdForm.new_password = ''
+  pwdDialogVisible.value = true
 }
 
 const submitPwd = () => {
   pwdFormRef.value.validate(async (valid) => {
     if (!valid) return
-    pwdLoading.value = true
+    if (pwdForm.old_password === pwdForm.new_password) {
+      return ElMessage.warning('新密码不能与旧密码相同')
+    }
+    submitLoading.value = true
     try {
-      const res = await request.post('/api/worker/password/update', pwdForm)
+      const res = await request.post('/api/services/staff/update_pwd', pwdForm)
       if (res.code === 200) {
-        ElMessage.success(res.msg)
+        ElMessage.success('密码修改成功，请牢记')
         pwdDialogVisible.value = false
-        logout(true) 
+        if (isForcedReset.value) {
+          userInfo.value.need_reset_pwd = false
+          localStorage.setItem('h5_worker_user', JSON.stringify(userInfo.value))
+        }
       } else {
-        ElMessage.error(res.msg)
+        ElMessage.error(res.msg || '修改失败')
       }
-    } finally { pwdLoading.value = false }
+    } finally {
+      submitLoading.value = false
+    }
   })
 }
 
-const logout = (silent = false) => {
-  const clearAuth = () => {
-    // 核心：一并清理双活键值，使用纯净 router 推送遣返
-    localStorage.removeItem('h5_worker_token')
-    localStorage.removeItem('saas_token')
-    localStorage.removeItem('worker_info')
-    router.push('/h5/login')
-  }
-  if (silent === true) {
-    clearAuth()
-  } else {
-    if (window.confirm('确认安全退出作业终端吗？')) {
-      clearAuth()
-    }
-  }
+const handleLogout = () => {
+  localStorage.removeItem('h5_worker_token')
+  localStorage.removeItem('h5_worker_user')
+  window.location.href = '/h5/login'
 }
 
-const getStatusLabel = (status) => ({ 1: '待指派', 2: '处理中', 3: '待指派验收', 4: '已完工结案' }[status] || '未知')
-const getStatusType = (status) => ({ 1: 'danger', 2: 'warning', 3: 'primary', 4: 'success' }[status] || 'info')
-
 onMounted(() => {
-  initWorkerInfo()
-  fetchTasks()
-  fetchPoints()
+  const storedUser = localStorage.getItem('h5_worker_user')
+  if (storedUser) {
+    try {
+      const parsed = JSON.parse(storedUser)
+      if (parsed && parsed.id) {
+        userInfo.value = parsed
+        fetchWorkOrders()
+        if (userInfo.value.need_reset_pwd) {
+          openPwdDialog(true)
+        }
+      } else {
+        window.location.href = '/h5/login'
+      }
+    } catch (e) {
+      localStorage.removeItem('h5_worker_token')
+      localStorage.removeItem('h5_worker_user')
+      window.location.href = '/h5/login'
+    }
+  } else {
+    window.location.href = '/h5/login'
+  }
 })
 </script>
 
 <style scoped>
-.h5-worker-main { min-height: 100vh; background-color: #f4f6f9; display: flex; flex-direction: column; }
-.top-nav { background: #fff; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-.user-greet { font-size: 14px; font-weight: bold; color: #2c3e50; }
-.nav-actions { display: flex; align-items: center; }
-
-:deep(.mobile-tabs .el-tabs__header) { margin: 0; background: #fff; }
-.pane-content { padding: 15px; }
-
-.task-card, .patrol-point-card { background: #fff; border-radius: 12px; padding: 18px; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
-.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.task-id { font-family: monospace; font-weight: bold; color: #909399; }
-.task-title { font-size: 16px; font-weight: bold; color: #303133; margin-bottom: 6px; }
-.task-desc { font-size: 13px; color: #606266; line-height: 1.5; margin-bottom: 10px; }
-.task-img { width: 80px; height: 80px; border-radius: 6px; margin-bottom: 10px; }
-.task-meta { font-size: 11px; color: #a8abb2; }
-
-.patrol-point-card { display: flex; justify-content: space-between; align-items: center; }
-.point-info { display: flex; align-items: center; gap: 10px; }
-.point-icon { font-size: 24px; color: #409eff; }
-.point-name { font-size: 14px; font-weight: bold; color: #303133; }
-.point-id { font-size: 11px; color: #909399; margin-top: 2px; }
-
-.cert-uploader { border: 1px dashed #d9d9d9; border-radius: 8px; cursor: pointer; position: relative; overflow: hidden; display: block; width: 100%; height: 160px; background-color: #fafafa; }
-.upload-trigger { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; color: #8c939d; font-size: 13px; }
-.plus-icon { font-size: 28px; margin-bottom: 8px; }
-.preview-img { width: 100%; height: 100%; object-fit: contain; }
+.mobile-container { width: 100%; max-width: 480px; margin: 0 auto; min-height: 100vh; background-color: #f5f7fa; padding-bottom: 70px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; position: relative;}
+.mobile-header { background: linear-gradient(135deg, #2c3e50, #3498db); color: #fff; padding: 30px 20px 40px 20px; display: flex; justify-content: space-between; align-items: flex-start; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; }
+.user-greeting h3 { margin: 0 0 8px 0; font-size: 22px; font-weight: bold; }
+.user-greeting p { margin: 0; font-size: 13px; opacity: 0.9; display: flex; align-items: center; gap: 4px; }
+.responsibility-card { margin: -25px 15px 15px 15px; background: #fff; border-radius: 10px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); position: relative; z-index: 10; }
+.resp-title { font-size: 14px; font-weight: bold; color: #409eff; margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
+.resp-content { font-size: 13px; color: #606266; line-height: 1.6; }
+.stats-panel { display: flex; margin: 0 15px 20px 15px; background: #fff; border-radius: 10px; padding: 15px 0; box-shadow: 0 2px 12px rgba(0,0,0,0.03); }
+.stat-box { flex: 1; text-align: center; border-right: 1px solid #f0f0f0; }
+.stat-box:last-child { border-right: none; }
+.stat-num { font-size: 24px; font-weight: bold; margin-bottom: 5px; font-family: monospace; }
+.stat-label { font-size: 12px; color: #909399; }
+.text-danger { color: #f56c6c; }
+.text-success { color: #67c23a; }
+.action-grid { display: flex; gap: 15px; padding: 0 15px; margin-bottom: 20px; }
+.action-btn { flex: 1; background: #fff; border-radius: 12px; padding: 15px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); cursor: pointer; color: #303133; font-size: 14px; border: 1px solid #ebeef5; font-weight: bold;}
+.action-btn:active { background: #f0f2f5; }
+.action-icon { font-size: 28px; }
+.task-list { padding: 0 15px; }
+.list-title { font-size: 15px; font-weight: bold; color: #303133; margin-bottom: 15px; border-left: 4px solid #409eff; padding-left: 8px; }
+.task-card { background: #fff; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #f0f2f5; }
+.task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f0f2f5; padding-bottom: 10px; }
+.task-title { font-weight: bold; font-size: 15px; color: #303133; }
+.task-body p { margin: 0 0 8px 0; font-size: 13px; color: #606266; line-height: 1.5; }
+.task-body strong { color: #303133; }
+.image-preview-box { margin-top: 10px; background-color: #f8f9fa; padding: 10px; border-radius: 8px; }
+.task-footer { margin-top: 15px; }
+.full-btn { width: 100%; border-radius: 8px; font-weight: bold; letter-spacing: 1px; }
+.profile-wrapper { padding: 0 15px; margin-top: -20px; position: relative; z-index: 10; }
+.profile-header { background: #fff; border-radius: 10px; padding: 25px 20px; display: flex; align-items: center; gap: 15px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }
+.profile-header .avatar { width: 60px; height: 60px; background: #e6f1fc; color: #409eff; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 30px; }
+.profile-header .name { font-size: 18px; font-weight: bold; color: #303133; margin-bottom: 5px; }
+.profile-menu { background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.03); border: 1px solid #f0f2f5; }
+.menu-item { display: flex; align-items: center; padding: 18px 20px; font-size: 15px; color: #303133; border-bottom: 1px solid #fafafa; cursor: pointer; }
+.menu-item:active { background-color: #f5f7fa; }
+.menu-item:last-child { border-bottom: none; }
+.menu-item .el-icon { margin-right: 10px; font-size: 18px; color: #909399; }
+.menu-item .arrow { margin-left: auto; color: #c0c4cc; margin-right: 0; }
+.text-danger { color: #f56c6c !important; font-weight: bold; }
+.text-danger .el-icon { color: #f56c6c !important; }
+.force-tips { font-size: 13px; color: #f56c6c; background-color: #fef0f0; padding: 12px; border-radius: 6px; margin-bottom: 20px; line-height: 1.6; border: 1px solid #fde2e2; }
+.bottom-tabbar { position: fixed; bottom: 0; left: 0; right: 0; max-width: 480px; margin: 0 auto; height: 55px; background: #fff; display: flex; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 100; border-top: 1px solid #ebeef5; }
+.tab-item { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #909399; font-size: 11px; cursor: pointer; }
+.tab-item .el-icon { font-size: 22px; margin-bottom: 3px; }
+.tab-item.active { color: #409eff; }
 </style>
