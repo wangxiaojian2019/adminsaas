@@ -8,55 +8,46 @@ class DashboardController
 {
     public function index(Request $request)
     {
-        // 1. 统计资产空间数据
-        $totalSpaces = Db::table('spaces')->count();
-        $rentedSpaces = Db::table('spaces')->where('status', 1)->count();
-        $vacancyRate = $totalSpaces > 0 ? round((($totalSpaces - $rentedSpaces) / $totalSpaces) * 100, 2) . '%' : '0%';
+        // 1. 空间资产去化率推演
+        $spaceStats = Db::table('spaces')
+            ->selectRaw('count(*) as total, sum(case when status=1 then 1 else 0 end) as rented, sum(case when status=0 then 1 else 0 end) as vacant, sum(case when status in (2,3) then 1 else 0 end) as maintain')
+            ->first();
 
-        // 2. 统计业财流水数据 (聚合查询 receivables 表)
-        $totalReceivable = Db::table('receivables')->sum('amount') ?: 0;
-        $totalReceived = Db::table('receivables')->where('is_paid', 1)->sum('amount') ?: 0;
-        $totalUnpaid = Db::table('receivables')->where('is_paid', 0)->sum('amount') ?: 0;
+        // 2. 业财资金归集盘 (全量流水核对)
+        $financeStats = Db::table('receivables')
+            ->selectRaw('COALESCE(sum(amount), 0) as total_receivable, COALESCE(sum(case when is_paid=1 then amount else 0 end), 0) as actual_received')
+            ->first();
 
-        // 3. 抓取突发安全隐患 (读取未结单状态 status < 4 的工单)
-        $activeOrders = Db::table('work_orders')
-            ->where('status', '<', 4)
-            ->orderBy('id', 'desc')
+        // 3. 户籍与契约活跃度
+        $enterpriseCount = Db::table('enterprises')->count();
+        $activeContracts = Db::table('contracts')->where('status', 1)->count();
+
+        // 4. 后勤调度预警：提取中控室亟需处理的工单 (待指派、待验)
+        $urgentOrders = Db::table('work_orders')
+            ->whereIn('status', [1, 3])
+            ->orderBy('created_at', 'desc')
             ->limit(5)
             ->get();
-            
-        $patrolAlerts = [];
-        foreach ($activeOrders as $order) {
-            $patrolAlerts[] = [
-                'location' => $order->title,         // 映射前端的 location 字段
-                'remarks' => $order->description,    // 映射前端的 remarks 字段
-                'worker_name' => $order->reporter_name, // 映射前端的 worker_name
-                'check_time' => $order->created_at   // 映射前端的 check_time
-            ];
-        }
 
-        // 4. 热力图基础数据查询
-        $heatMap = Db::table('spaces')
-            ->select('building_name', 'floor', 'room_number', 'status')
+        // 5. 财务核销预警：强制使用 created_at 替代 updated_at 规避 1054 报错
+        $pendingBills = Db::table('receivables')
+            ->leftJoin('enterprises', 'receivables.enterprise_id', '=', 'enterprises.id')
+            ->where('is_paid', 2)
+            ->select('receivables.id', 'receivables.amount', 'enterprises.name as enterprise_name', 'receivables.created_at')
+            ->orderBy('receivables.created_at', 'desc')
+            ->limit(5)
             ->get();
 
         return json([
             'code' => 200,
             'msg' => 'success',
             'data' => [
-                'asset' => [
-                    'total_spaces' => $totalSpaces,
-                    'rented_spaces' => $rentedSpaces,
-                    'vacancy_rate' => $vacancyRate
-                ],
-                'finance' => [
-                    // 格式化为保留两位小数的字符串，适配前端展示
-                    'total_receivable' => number_format($totalReceivable, 2, '.', ''),
-                    'total_received' => number_format($totalReceived, 2, '.', ''),
-                    'total_unpaid' => number_format($totalUnpaid, 2, '.', '')
-                ],
-                'patrol_alerts' => $patrolAlerts,
-                'heat_map' => $heatMap
+                'space' => $spaceStats,
+                'finance' => $financeStats,
+                'enterprise_count' => $enterpriseCount,
+                'contract_count' => $activeContracts,
+                'urgent_orders' => $urgentOrders,
+                'pending_bills' => $pendingBills
             ]
         ]);
     }

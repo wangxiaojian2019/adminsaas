@@ -23,18 +23,25 @@ class ExportController
                 $filename = '空间资产台账';
                 break;
             case 'leads':
-                $headers = ['线索ID', '企业名称', '行业', '税号', '联系人', '电话', '需求面积'];
-                $data = Db::table('leads')->select('id', 'customer_name', 'industry', 'tax_no', 'contact_person', 'phone', 'demand_area')->get()->toArray();
+                $headers = ['线索ID', '企业名称', '行业', '税号', '联系人', '电话', '需求面积', '系统获取时间'];
+                $data = Db::table('leads')->select('id', 'customer_name', 'industry', 'tax_no', 'contact_person', 'phone', 'demand_area', 'created_at')->get()->toArray();
                 $filename = '招商线索库';
                 break;
+            case 'enterprises':
+                $headers = ['企业ID', '企业全称', '所属行业', '关键联系人', '移动端登录手机', '系统建档时间'];
+                $data = Db::table('enterprises')->select('id', 'name', 'industry', 'contact_person', 'phone', 'created_at')->get()->toArray();
+                $filename = '企业户籍档案池';
+                break;
             case 'contracts':
-                $headers = ['合同编号', '企业ID', '空间ID', '起租日', '退租日', '月租金', '月物业费', '车辆备注'];
-                $data = Db::table('contracts')->select('contract_no', 'enterprise_id', 'space_id', 'start_date', 'end_date', 'monthly_rent', 'property_fee', 'vehicle_info')->get()->toArray();
+                // 核心修复：追加系统录入/起草时间
+                $headers = ['合同编号', '企业ID', '空间ID', '起租日', '退租日', '月租金', '月物业费', '车辆备注', '系统起草/录入时间'];
+                $data = Db::table('contracts')->select('contract_no', 'enterprise_id', 'space_id', 'start_date', 'end_date', 'monthly_rent', 'property_fee', 'vehicle_info', 'created_at')->get()->toArray();
                 $filename = '租务合同台账';
                 break;
             case 'finance':
-                $headers = ['流水单号', '企业ID', '空间ID', '费用科目', '金额', '最晚缴费日', '核销状态', '核销时间'];
-                $data = Db::table('receivables')->select('id', 'enterprise_id', 'space_id', 'bill_type', 'amount', 'due_date', 'is_paid', 'paid_time')->get()->toArray();
+                // 核心修复：追加系统出账时间与物理核销时间
+                $headers = ['流水单号', '企业ID', '空间ID', '费用科目', '金额', '最晚缴费日', '系统出账时间', '核销状态', '核销打款时间'];
+                $data = Db::table('receivables')->select('id', 'enterprise_id', 'space_id', 'bill_type', 'amount', 'due_date', 'created_at', 'is_paid', 'paid_time')->get()->toArray();
                 $filename = '业财流水报表';
                 break;
             case 'dashboard':
@@ -50,11 +57,10 @@ class ExportController
                     ->get()->toArray();
                 $filename = '车位资产与月卡台账';
                 break;
-                
-            // --- 本次新增扩展的 5 个离线导出模块 ---
             case 'spaces':
-                $headers = ['大厦名称', '楼层', '房间编号', '建筑面积(㎡)', '当前状态(0空置/1在租/2维修/3装修)', '承租企业名称'];
-                $data = Db::table('spaces')->select('building_name', 'floor', 'room_number', 'area', 'status', 'enterprise_name')->orderBy('building_name')->orderBy('floor')->get()->toArray();
+                // 核心修复：追加底层资产建档时间
+                $headers = ['大厦名称', '楼层', '房间编号', '建筑面积(㎡)', '当前状态(0空置/1在租/2维修/3装修)', '承租企业名称', '资产建档时间'];
+                $data = Db::table('spaces')->select('building_name', 'floor', 'room_number', 'area', 'status', 'enterprise_name', 'created_at')->orderBy('building_name')->orderBy('floor')->get()->toArray();
                 $filename = '房源资产精细库';
                 break;
             case 'patrol_records':
@@ -82,7 +88,6 @@ class ExportController
                 return json(['code' => 400, 'msg' => '未知的导出模块']);
         }
 
-        // 强锁死安全审计日志
         Db::table('export_audit_logs')->insert([
             'admin_id' => $user->id,
             'admin_name' => $user->real_name ?? '未知人员',
@@ -103,7 +108,6 @@ class ExportController
             $csvContent .= implode(',', $safeRow) . "\n";
         }
 
-        // 注入离线溯源水印
         $csvContent .= "\n\n";
         $csvContent .= "====== 内部数据安全防伪溯源水印 ======\n";
         $csvContent .= "导出时间：," . date('Y-m-d H:i:s') . "\n";

@@ -2,7 +2,7 @@
 use Webman\Route;
 use support\Response;
 
-// 1. 终极防线：全局 OPTIONS 请求拦截与跨域头强力下发
+// 1. 全局 OPTIONS 请求拦截与跨域头强力下发
 Route::options('[{path:.+}]', function () {
     return new Response(204, [
         'Access-Control-Allow-Origin' => '*',
@@ -17,26 +17,21 @@ Route::post('/api/tenant/login', [app\controller\LoginController::class, 'tenant
 
 Route::group('/api', function () {
     
-    // --- 动态权限与系统模块 ---
     Route::get('/system/getMyMenus', [app\controller\SystemController::class, 'getMyMenus']);
-
     Route::get('/dashboard', [app\controller\DashboardController::class, 'index']);
     
-    // 系统控制与数据脱密审计
     Route::get('/system/roles/list', [app\controller\SystemController::class, 'roleList']);
     Route::post('/system/roles/add', [app\controller\SystemController::class, 'roleAdd']);
     Route::post('/system/roles/update', [app\controller\SystemController::class, 'roleUpdate']);
     Route::post('/system/roles/delete', [app\controller\SystemController::class, 'roleDelete']);
-    
     Route::get('/system/admins/list', [app\controller\SystemController::class, 'adminList']);
     Route::post('/system/admins/add', [app\controller\SystemController::class, 'adminAdd']);
-    Route::post('/system/admins/update', [app\controller\SystemController::class, 'adminUpdate']); // 新增：子账号修改
-    Route::post('/system/admins/delete', [app\controller\SystemController::class, 'adminDelete']); // 新增：子账号注销
+    Route::post('/system/admins/update', [app\controller\SystemController::class, 'adminUpdate']); 
+    Route::post('/system/admins/delete', [app\controller\SystemController::class, 'adminDelete']); 
     
     Route::get('/export/download', [app\controller\ExportController::class, 'download']);
     Route::get('/system/audit/logs', [app\controller\ExportController::class, 'auditLogs']);
     
-    // 空间资产台账
     Route::get('/buildings/list', [app\controller\BuildingController::class, 'list']);
     Route::post('/buildings/add', [app\controller\BuildingController::class, 'add']);
     Route::get('/spaces/list', [app\controller\SpaceController::class, 'list']);
@@ -46,66 +41,64 @@ Route::group('/api', function () {
     Route::post('/spaces/status', [app\controller\SpaceController::class, 'updateStatus']);
     Route::get('/v1/assets/tree', [app\controller\SpaceController::class, 'tree']);
     
-    // 智能车场月卡资产核心管理
     Route::get('/vehicles/list', [app\controller\VehicleController::class, 'list']);
     Route::post('/vehicles/add', [app\controller\VehicleController::class, 'add']);
     Route::post('/vehicles/renew', [app\controller\VehicleController::class, 'renew']);
     Route::post('/vehicles/delete', [app\controller\VehicleController::class, 'delete']);
     
-    // CRM 线索管理
     Route::get('/leads/list', [app\controller\LeadController::class, 'list']);
     Route::post('/leads/add', [app\controller\LeadController::class, 'add']);
     Route::get('/leads/follow/list', [app\controller\LeadController::class, 'followList']);
     Route::post('/leads/follow/add', [app\controller\LeadController::class, 'followAdd']);
     
-    // 企业户籍档案与租户账号管理
     Route::get('/enterprises/list', [app\controller\EnterpriseController::class, 'list']);
     Route::post('/enterprises/add', [app\controller\EnterpriseController::class, 'add']);
     Route::post('/enterprises/reset_pwd', [app\controller\EnterpriseController::class, 'resetPwd']);
 
-    // 合同管理与退租清算
     Route::get('/contracts/list', [app\controller\ContractController::class, 'list']);
     Route::post('/contracts/add', [app\controller\ContractController::class, 'add']);
     Route::post('/contracts/terminate', [app\controller\ContractController::class, 'terminate']);
+    Route::post('/contracts/revoke_terminate', [app\controller\ContractController::class, 'revokeTerminate']); 
     Route::get('/contracts/docs', [app\controller\ContractController::class, 'docs']);
     Route::post('/contracts/generate_elec', [app\controller\ContractController::class, 'generateElec']);
     
-    // 业财核销控制
     Route::get('/finance/receivables/list', [app\controller\FinanceController::class, 'receivableList']);
     Route::post('/finance/receivables/pay', [app\controller\FinanceController::class, 'pay']);
     Route::post('/finance/meters/record', [app\controller\FinanceController::class, 'recordMeter']);
+    Route::get('/finance/checkouts/list', [app\controller\FinanceController::class, 'checkoutList']);
+    Route::post('/finance/checkouts/pay', [app\controller\FinanceController::class, 'payCheckout']);
     
-    // BI 数据魔方中心
     Route::get('/reports/finance', [app\controller\ReportController::class, 'financeStats']);
     Route::get('/reports/leads', [app\controller\ReportController::class, 'leadStats']);
     Route::get('/reports/assets', [app\controller\ReportController::class, 'assetStats']);
     
-    // 移动租户端专用多维服务中台接口
     Route::get('/tenant/overview', [app\controller\TenantPortalController::class, 'getOverview']);
     Route::get('/tenant/bills', [app\controller\TenantPortalController::class, 'getBills']);
     Route::get('/tenant/contracts', [app\controller\TenantPortalController::class, 'getContracts']);
-    Route::post('/tenant/order/submit', [app\controller\TenantPortalController::class, 'submitOrder']);
     Route::post('/tenant/pay', [app\controller\TenantPortalController::class, 'payBill']);
+    Route::post('/tenant/order/submit', [app\controller\TenantPortalController::class, 'submitOrder']); 
+    Route::post('/tenant/password/update', [app\controller\TenantPortalController::class, 'updatePassword']); 
+
+    // 基层外勤端作业移动中台
+    Route::get('/worker/tasks', [app\controller\WorkerPortalController::class, 'getTasks']);
+    Route::post('/worker/tasks/complete', [app\controller\WorkerPortalController::class, 'completeTask']);
+    Route::get('/worker/patrol/points', [app\controller\WorkerPortalController::class, 'getPatrolPoints']);
+    Route::post('/worker/patrol/submit', [app\controller\WorkerPortalController::class, 'submitPatrol']);
+    Route::post('/worker/password/update', [app\controller\WorkerPortalController::class, 'updatePassword']); // 核心新增：外勤人员改密通道
     
-    // 安防网格中心
     Route::get('/patrol/points/list', [app\controller\PatrolController::class, 'pointList']);
     Route::post('/patrol/points/add', [app\controller\PatrolController::class, 'pointAdd']);
     Route::post('/patrol/checkin', [app\controller\PatrolController::class, 'checkin']);
     Route::get('/patrol/records', [app\controller\PatrolController::class, 'records']);
     
-    // 核心修复：工单服务与基层人员管理
     Route::get('/services/work-orders/list', [app\controller\WorkOrderController::class, 'list']);
     Route::get('/services/workOrdersList', [app\controller\WorkOrderController::class, 'list']);
-    
     Route::post('/services/work-orders/assign', [app\controller\WorkOrderController::class, 'assign']);
     Route::post('/services/workOrdersAssign', [app\controller\WorkOrderController::class, 'assign']);
-    
     Route::post('/services/work-orders/complete', [app\controller\WorkOrderController::class, 'complete']);
     Route::post('/services/workOrdersComplete', [app\controller\WorkOrderController::class, 'complete']);
-    
     Route::post('/services/work-orders/verify', [app\controller\WorkOrderController::class, 'verify']);
     Route::post('/services/workOrdersVerify', [app\controller\WorkOrderController::class, 'verify']);
-
     Route::get('/services/staff/list', [app\controller\ServiceStaffController::class, 'list']);
     Route::post('/services/staff/add', [app\controller\ServiceStaffController::class, 'add']);
     Route::post('/services/staff/update', [app\controller\ServiceStaffController::class, 'update']);
@@ -117,12 +110,11 @@ Route::group('/api', function () {
     app\middleware\AuthMiddleware::class
 ]);
 
-// 2. 终极防线：全局 404 兜底路由
 Route::fallback(function (\support\Request $request) {
     return new Response(404, [
         'Content-Type' => 'application/json',
         'Access-Control-Allow-Origin' => '*',
         'Access-Control-Allow-Methods' => 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-Requested-With, token'
-    ], json_encode(['code' => 404, 'msg' => '致命错误：后端接口地址不存在或拼写错误 -> ' . $request->path()]));
+    ], json_encode(['code' => 404, 'msg' => '致命错误：后端接口地址不存在 -> ' . $request->path()]));
 });

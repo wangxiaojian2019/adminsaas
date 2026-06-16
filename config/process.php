@@ -35,6 +35,11 @@ return [
             'publicPath' => public_path()
         ]
     ],
+    // 核心新增：业财自动化巡检账单微服务
+    'billing_engine' => [
+        'handler' => \app\process\BillingTask::class,
+        'count' => 1, // 绝对单例模式，严禁并发，防止账单重复生成
+    ],
     // File update detection and automatic reload
     'monitor' => [
         'handler' => app\process\Monitor::class,

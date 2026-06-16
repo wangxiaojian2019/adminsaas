@@ -6,61 +6,71 @@ use support\Db;
 
 class ReportController
 {
-    /**
-     * 财务月度营收同环比与收缴率漏斗
-     */
     public function financeStats(Request $request)
     {
-        $list = Db::table('receivables')
-            ->select(
-                Db::raw("DATE_FORMAT(created_at, '%Y-%m') as month"),
-                Db::raw("SUM(amount) as total_receivable"),
-                Db::raw("SUM(CASE WHEN is_paid = 1 THEN amount ELSE 0 END) as total_received")
-            )
-            ->groupBy('month')
-            ->orderBy('month', 'asc')
-            ->get();
+        // 逆向生成近 6 个月时间轴作为计算基准
+        $months = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $months[] = date('Y-m', strtotime("-$i month"));
+        }
 
-        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
+        $trendData = [];
+        foreach ($months as $month) {
+            // 穿透当月账单池，计算应收与实收核销净额
+            $stats = Db::table('receivables')
+                ->where('due_date', 'like', $month . '%')
+                ->selectRaw('COALESCE(sum(amount), 0) as total, COALESCE(sum(case when is_paid=1 then amount else 0 end), 0) as paid')
+                ->first();
+                
+            $trendData[] = [
+                'month' => $month,
+                'total' => round($stats->total, 2),
+                'paid' => round($stats->paid, 2)
+            ];
+        }
+
+        return json(['code' => 200, 'msg' => 'success', 'data' => $trendData]);
     }
 
-    /**
-     * 招商渠道漏斗与转化结构分析
-     */
-    public function leadStats(Request $request)
-    {
-        // 渠道获客占比
-        $sourceStats = Db::table('leads')
-            ->select('source', Db::raw('count(*) as count'))
-            ->groupBy('source')
-            ->get();
-
-        // 线索状态深度
-        $statusStats = Db::table('leads')
-            ->select('status', Db::raw('count(*) as count'))
-            ->groupBy('status')
-            ->get();
-
-        return json([
-            'code' => 200,
-            'msg' => 'success',
-            'data' => [
-                'source' => $sourceStats,
-                'status' => $statusStats
-            ]
-        ]);
-    }
-
-    /**
-     * 空间资产去化率与面积留存结构
-     */
     public function assetStats(Request $request)
     {
-        $statusStats = Db::table('spaces')
-            ->select('status', Db::raw('count(*) as count'), Db::raw('SUM(area) as total_area'))
-            ->groupBy('status')
+        // 穿透计算各大厦的物理空间占比与去化率
+        $buildings = Db::table('spaces')
+            ->selectRaw('building_name, count(*) as total, sum(case when status=1 then 1 else 0 end) as rented')
+            ->groupBy('building_name')
             ->get();
+            
+        return json(['code' => 200, 'msg' => 'success', 'data' => $buildings]);
+    }
 
-        return json(['code' => 200, 'msg' => 'success', 'data' => $statusStats]);
+    public function leadStats(Request $request)
+    {
+        // 招商漏斗流量穿透
+        $stats = Db::table('leads')
+            ->selectRaw('status, count(*) as count')
+            ->groupBy('status')
+            ->get()
+            ->keyBy('status')
+            ->toArray();
+
+        $total = Db::table('leads')->count();
+        
+        $funnel = [
+            'total' => $total, // 100% 流量池
+            'following' => isset($stats[1]) ? clone $stats[1] : (object)['count' => 0], // 跟进转化中
+            'won' => isset($stats[2]) ? clone $stats[2] : (object)['count' => 0], // 签约落地
+            'lost' => isset($stats[3]) ? clone $stats[3] : (object)['count' => 0], // 流失沉默
+        ];
+
+        return json([
+            'code' => 200, 
+            'msg' => 'success', 
+            'data' => [
+                'total' => $funnel['total'],
+                'following' => $funnel['following']->count,
+                'won' => $funnel['won']->count,
+                'lost' => $funnel['lost']->count
+            ]
+        ]);
     }
 }
