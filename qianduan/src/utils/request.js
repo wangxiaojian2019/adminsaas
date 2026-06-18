@@ -1,9 +1,8 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import router from '../router' // 核心修复：直接引入路由实例进行跳转，避免强制刷新导致的死循环
+// 核心修复：彻底删除 import router from '../router'，根除循环依赖导致后台菜单消失的 Bug
 
 const service = axios.create({
-    // 请确保这里的 IP 是你宝塔的真实后端 IP
     baseURL: 'http://47.120.52.65:8787', 
     timeout: 10000 
 })
@@ -11,7 +10,6 @@ const service = axios.create({
 // 请求拦截器：动态装载 Token
 service.interceptors.request.use(
     config => {
-        // 核心修复：使用 href.includes 替代 pathname，完美兼容 Hash 模式和二级目录部署
         const currentUrl = window.location.href
         let token = null
 
@@ -36,28 +34,27 @@ service.interceptors.response.use(
     response => {
         const res = response.data
         
-        // 业务逻辑错误拦截
         if (res.code !== 200) {
             ElMessage.error(res.msg || '系统繁忙')
             
-            // 核心修复：401 鉴权失败拦截，彻底清除双重缓存并平滑推送路由
+            // 核心修复：401 鉴权失败拦截，使用原生 location 强物理跳转，避开 Router 死锁
             if (res.code === 401) {
                 const currentUrl = window.location.href
                 
                 if (currentUrl.includes('/h5/tenant')) {
                     localStorage.removeItem('h5_tenant_token')
-                    localStorage.removeItem('h5_tenant_user') // 斩断死循环的关键
-                    router.push('/h5/tenant/login')
+                    localStorage.removeItem('h5_tenant_user') 
+                    window.location.href = '/h5/tenant/login'
                 } 
                 else if (currentUrl.includes('/h5/worker') || currentUrl.includes('/h5/login')) {
                     localStorage.removeItem('h5_worker_token')
                     localStorage.removeItem('h5_worker_user')
-                    router.push('/h5/login')
+                    window.location.href = '/h5/login'
                 } 
                 else {
                     localStorage.removeItem('saas_token')
                     localStorage.removeItem('saas_user')
-                    router.push('/login')
+                    window.location.href = '/login'
                 }
             }
             return Promise.reject(new Error(res.msg || 'Error'))

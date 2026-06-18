@@ -146,7 +146,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Iphone, List, Aim, Brush, Setting, FullScreen, Refresh, UserFilled, Lock, SwitchButton, ArrowRight, User, Location, Camera } from '@element-plus/icons-vue'
+import { Iphone, List, Aim, Brush, Setting, FullScreen, Refresh, UserFilled, Lock, SwitchButton, ArrowRight, User } from '@element-plus/icons-vue'
 import request from '../../../utils/request'
 
 const router = useRouter()
@@ -194,6 +194,7 @@ const fetchWorkOrders = async () => {
     const res = await request.get('/api/services/work-orders/list')
     if (res.code === 200) rawOrders.value = res.data
   } catch (e) {
+    void e
   }
 }
 
@@ -250,7 +251,7 @@ const submitPwd = () => {
 const handleLogout = () => {
   localStorage.removeItem('h5_worker_token')
   localStorage.removeItem('h5_worker_user')
-  window.location.href = '/h5/login'
+  router.push('/h5/login')
 }
 
 onMounted(() => {
@@ -265,15 +266,16 @@ onMounted(() => {
           openPwdDialog(true)
         }
       } else {
-        window.location.href = '/h5/login'
+        router.push('/h5/login')
       }
     } catch (e) {
+      void e
       localStorage.removeItem('h5_worker_token')
       localStorage.removeItem('h5_worker_user')
-      window.location.href = '/h5/login'
+      router.push('/h5/login')
     }
   } else {
-    window.location.href = '/h5/login'
+    router.push('/h5/login')
   }
 })
 </script>

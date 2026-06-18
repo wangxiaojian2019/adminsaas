@@ -20,8 +20,8 @@
                 <el-image 
                   v-if="parseDesc(row.description).image"
                   style="width: 40px; height: 40px; border-radius: 4px; margin-left: 10px; cursor: pointer; flex-shrink: 0;"
-                  :src="parseDesc(row.description).image"
-                  :preview-src-list="[parseDesc(row.description).image]"
+                  :src="getFullImgUrl(parseDesc(row.description).image)"
+                  :preview-src-list="[getFullImgUrl(parseDesc(row.description).image)]"
                   fit="cover"
                   preview-teleported
                 />
@@ -42,13 +42,9 @@
               </el-tag>
             </template>
           </el-table-column>
-
-          <el-table-column label="系统下发时间" width="160" align="center">
-            <template #default="{ row }">
-              <span style="font-size: 12px; color: #909399; font-family: monospace;">{{ row.created_at }}</span>
-            </template>
+          <el-table-column label="创建时间" width="160" align="center">
+            <template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template>
           </el-table-column>
-
           <el-table-column label="调度操作" width="160" align="center" fixed="right">
             <template #default="{ row }">
               <el-button v-if="row.status === 1 && activeStaff.length > 0" type="primary" link icon="Position" @click="openAssignDialog(row)">派单指派</el-button>
@@ -93,13 +89,6 @@
           <el-table-column label="状态" width="80" align="center">
             <template #default="{ row }"><el-tag :type="row.status === 1 ? 'success' : 'danger'">{{ row.status === 1 ? '正常' : '封禁' }}</el-tag></template>
           </el-table-column>
-
-          <el-table-column label="系统建档时间" width="160" align="center">
-            <template #default="{ row }">
-              <span style="font-size: 12px; color: #909399; font-family: monospace;">{{ row.created_at }}</span>
-            </template>
-          </el-table-column>
-
           <el-table-column label="操作" width="160" align="center" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" link icon="Edit" @click="openEditDialog(row)">编辑</el-button>
@@ -181,13 +170,29 @@ const staffRules = {
 
 const activeStaff = computed(() => staffData.value.filter(s => s.status === 1))
 
+// 核心修复1：放开相对路径限制，正则匹配提取冒号后所有内容
 const parseDesc = (desc) => {
   if (!desc) return { text: '', image: '' }
-  const match = desc.match(/【现场照片证物】:\s*(http.*)/)
-  return match ? { text: desc.replace(match[0], '').trim(), image: match[1] } : { text: desc, image: '' }
+  const match = desc.match(/【现场照片证物】:\s*(.*)/)
+  return match ? { text: desc.replace(match[0], '').trim(), image: match[1].trim() } : { text: desc, image: '' }
 }
 
-const getOrderStatusMeta = (status) => ({ 1: { label: '待指派', type: 'danger' }, 2: { label: '处理中', type: 'warning' }, 3: { label: '待验', type: 'primary' }, 4: { label: '已结案', type: 'info' }[status] || { label: '未知', type: 'info' } })
+// 核心修复2：增加 IP 域名补全，确保跨域渲染
+const getFullImgUrl = (url) => {
+  if (!url) return ''
+  return url.startsWith('http') ? url : `http://47.120.52.65:8787${url}`
+}
+
+// 核心修复3：修复对象调用语法问题，防止状态标识渲染报错
+const getOrderStatusMeta = (status) => {
+  const statusMap = {
+    1: { label: '待指派', type: 'danger' },
+    2: { label: '处理中', type: 'warning' },
+    3: { label: '待验', type: 'primary' },
+    4: { label: '已结案', type: 'info' }
+  }
+  return statusMap[status] || { label: '未知', type: 'info' }
+}
 
 const getStaffName = (id) => {
   const staff = staffData.value.find(s => s.id === id)

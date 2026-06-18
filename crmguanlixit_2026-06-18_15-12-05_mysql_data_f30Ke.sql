@@ -407,7 +407,7 @@ CREATE TABLE `patrol_points` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `location` varchar(100) NOT NULL COMMENT '巡检物理点位名称',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=103 DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB AUTO_INCREMENT=104 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -416,7 +416,7 @@ CREATE TABLE `patrol_points` (
 
 LOCK TABLES `patrol_points` WRITE;
 /*!40000 ALTER TABLE `patrol_points` DISABLE KEYS */;
-INSERT INTO `patrol_points` VALUES (101,'京东大厦 5F 顶层消防水箱防区','2026-01-10 10:00:00','京东大厦 5F 顶层消防水箱防区'),(102,'腾讯大厦 地下车库强电主控柜','2026-01-10 10:05:00','腾讯大厦 地下车库强电主控柜');
+INSERT INTO `patrol_points` VALUES (101,'京东大厦 5F 顶层消防水箱防区','2026-01-10 10:00:00','京东大厦 5F 顶层消防水箱防区'),(102,'腾讯大厦 地下车库强电主控柜','2026-01-10 10:05:00','腾讯大厦 地下车库强电主控柜'),(103,'腾讯大厦909消防层消费设备','2026-06-16 19:32:51','腾讯大厦909消防层消费设备');
 /*!40000 ALTER TABLE `patrol_points` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -605,7 +605,7 @@ CREATE TABLE `work_orders` (
   `status` tinyint(1) NOT NULL DEFAULT '1' COMMENT '1:待指派 2:处理中 3:待验收 4:已结单',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -614,6 +614,7 @@ CREATE TABLE `work_orders` (
 
 LOCK TABLES `work_orders` WRITE;
 /*!40000 ALTER TABLE `work_orders` DISABLE KEYS */;
+INSERT INTO `work_orders` VALUES (1,'贝吉塔被打啦','\n\n【现场照片证物】: /uploads/cert_6a3137ef47cb8.jpg','拓普检测技术有限公司 (胡总)',NULL,1,'2026-06-16 19:48:12');
 /*!40000 ALTER TABLE `work_orders` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -634,4 +635,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-16 15:06:20
+-- Dump completed on 2026-06-18 15:12:06
