@@ -34,6 +34,9 @@
             <template #default="{ row }">
               <el-tag v-if="row.is_paid === 1" type="success">已结清</el-tag>
               <el-tag v-else-if="row.is_paid === 2" type="warning" effect="dark">待审核凭证</el-tag>
+              <el-tooltip v-else-if="row.is_paid === 3" :content="row.reject_reason || '凭证被驳回'" placement="top">
+                <el-tag type="danger" effect="plain" style="cursor: pointer;"><el-icon><Warning /></el-icon> 凭证被驳回</el-tag>
+              </el-tooltip>
               <el-tag v-else type="danger">待收款</el-tag>
             </template>
           </el-table-column>
@@ -41,7 +44,7 @@
           <el-table-column label="操作/核销记录" width="140" align="center" fixed="right">
             <template #default="{ row }">
               <el-button v-if="row.is_paid === 2" type="warning" link icon="View" @click="openReviewDialog(row)">审阅单据</el-button>
-              <el-popconfirm v-else-if="row.is_paid === 0" title="确认收到线下款项并强制核销？" @confirm="handlePay(row.id, 'direct')">
+              <el-popconfirm v-else-if="row.is_paid === 0 || row.is_paid === 3" title="确认收到线下款项并强制核销？" @confirm="handlePay(row.id, 'direct')">
                 <template #reference>
                   <el-button type="primary" link icon="Select">强制核销</el-button>
                 </template>
@@ -120,7 +123,7 @@
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="reviewDialogVisible" title="对公转账凭证审核室" width="500px">
+    <el-dialog v-model="reviewDialogVisible" title="对公转账凭证审核室" width="550px">
       <div v-if="currentReviewBill.receipt_url" style="text-align: center;">
         <p class="review-tips">点击图片可放大查看流水号等细节</p>
         <el-image 
@@ -132,11 +135,22 @@
             <p><strong>打款企业：</strong>{{ currentReviewBill.enterprise_name }}</p>
             <p><strong>应核销金额：</strong><span class="amount-text">￥{{ currentReviewBill.amount }}</span></p>
         </div>
+        
+        <div style="margin-top: 15px; text-align: left;">
+          <p style="font-size: 13px; color: #606266; margin-bottom: 8px;">若需驳回，请填写驳回原因：</p>
+          <el-input 
+            v-model="rejectReasonText" 
+            type="textarea" 
+            :rows="2" 
+            placeholder="例如：凭证截图不完整、金额与应收不符等..." 
+          />
+        </div>
       </div>
       <div v-else><el-empty description="未获取到电子回执单图片" :image-size="60" /></div>
+      
       <template #footer>
         <div style="display: flex; justify-content: space-between; width: 100%;">
-          <el-button type="danger" plain @click="handlePay(currentReviewBill.id, 'reject')">单据无效，直接驳回</el-button>
+          <el-button type="danger" plain @click="handlePay(currentReviewBill.id, 'reject')">单据无效，执行驳回</el-button>
           <el-button type="success" @click="handlePay(currentReviewBill.id, 'approve')">确认到账，核销归档</el-button>
         </div>
       </template>
@@ -172,8 +186,9 @@
 
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
+import { Warning } from '@element-plus/icons-vue'
 import request from '../../utils/request'
 
 const route = useRoute()
@@ -189,6 +204,7 @@ const checkoutData = ref([]); const checkoutLoading = ref(false)
 
 const reviewDialogVisible = ref(false)
 const currentReviewBill = ref({})
+const rejectReasonText = ref('') // 绑定驳回原因文本
 
 const meterDialogVisible = ref(false); const meterFormRef = ref(null)
 const meterForm = reactive({ space_id: '', meter_type: 1, current_reading: '', record_month: '' })
@@ -248,12 +264,30 @@ watch(() => route.query.review_bill_id, (newId) => {
 
 const openReviewDialog = (row) => {
   currentReviewBill.value = row
+  rejectReasonText.value = '' // 初始化驳回原因
   reviewDialogVisible.value = true
 }
 
 const handlePay = async (id, action) => {
+  // 若执行驳回，必须进行二次确认拦截
+  if (action === 'reject') {
+    if (!rejectReasonText.value.trim()) {
+      return ElMessage.warning('执行驳回必须填写驳回原因，以便通知租户。')
+    }
+    try {
+      await ElMessageBox.confirm('确认将此凭证驳回，并通知租户重新打款吗？', '驳回风险提示', {
+        type: 'warning', confirmButtonText: '坚决驳回', cancelButtonText: '再看看'
+      })
+    } catch (e) {
+      return // 取消操作
+    }
+  }
+
   try {
-    const res = await request.post('/api/finance/receivables/pay', { id, action })
+    const payload = { id, action }
+    if (action === 'reject') payload.reject_reason = rejectReasonText.value
+    
+    const res = await request.post('/api/finance/receivables/pay', payload)
     if (res.code === 200) {
       ElMessage.success(res.msg)
       reviewDialogVisible.value = false
@@ -335,7 +369,7 @@ onMounted(() => {
 .paid-time { font-size: 11px; color: #909399; }
 .timeline-text { font-size: 11px; font-family: monospace; text-align: left; margin: 2px 0; }
 .review-tips { font-size: 12px; color: #909399; margin-bottom: 10px; text-align: center;}
-.receipt-img { width: 100%; max-height: 50vh; border: 1px dashed #d9d9d9; border-radius: 8px; cursor: pointer; }
+.receipt-img { width: 100%; max-height: 40vh; border: 1px dashed #d9d9d9; border-radius: 8px; cursor: pointer; object-fit: contain; }
 .review-info { margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: left; }
 .review-info p { margin: 5px 0; font-size: 14px; color: #303133; }
 </style>

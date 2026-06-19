@@ -134,7 +134,7 @@
       </el-form>
       <template #footer>
         <el-button v-if="!isForcedReset" @click="pwdDialogVisible = false">取消</el-button>
-        <el-button type="primary" size="large" style="width: isForcedReset ? '100%' : 'auto'; letter-spacing: 2px;" :loading="submitLoading" @click="submitPwd">
+        <el-button type="primary" size="large" :style="{ width: isForcedReset ? '100%' : 'auto', letterSpacing: '2px' }" :loading="submitLoading" @click="submitPwd">
           确认安全升级
         </el-button>
       </template>

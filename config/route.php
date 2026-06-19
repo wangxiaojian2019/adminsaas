@@ -84,7 +84,7 @@ Route::group('/api', function () {
     Route::post('/worker/tasks/complete', [app\controller\WorkerPortalController::class, 'completeTask']);
     Route::get('/worker/patrol/points', [app\controller\WorkerPortalController::class, 'getPatrolPoints']);
     Route::post('/worker/patrol/submit', [app\controller\WorkerPortalController::class, 'submitPatrol']);
-    Route::post('/worker/password/update', [app\controller\WorkerPortalController::class, 'updatePassword']); // 核心新增：外勤人员改密通道
+    Route::post('/worker/password/update', [app\controller\WorkerPortalController::class, 'updatePassword']); 
     
     Route::get('/patrol/points/list', [app\controller\PatrolController::class, 'pointList']);
     Route::post('/patrol/points/add', [app\controller\PatrolController::class, 'pointAdd']);
@@ -105,6 +105,12 @@ Route::group('/api', function () {
     Route::post('/services/staff/delete', [app\controller\ServiceStaffController::class, 'delete']);
 
     Route::post('/upload', [app\controller\UploadController::class, 'upload']);
+
+    // ==========================================
+    // 核心新增：消息触达引擎路由 (必须在鉴权组内部，因为 /api 前缀已由外层提供)
+    // ==========================================
+    Route::get('/notification/list', [app\controller\NotificationController::class, 'list']);
+    Route::post('/notification/read', [app\controller\NotificationController::class, 'read']);
 
 })->middleware([
     app\middleware\AuthMiddleware::class

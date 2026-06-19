@@ -6,17 +6,13 @@ use support\Db;
 
 class FinanceController
 {
-    // ==========================================
-    // 区块一：标准应收账单控制流
-    // ==========================================
-
     public function receivableList(Request $request)
     {
         $list = Db::table('receivables')
             ->leftJoin('enterprises', 'receivables.enterprise_id', '=', 'enterprises.id')
             ->leftJoin('spaces', 'receivables.space_id', '=', 'spaces.id')
             ->select('receivables.*', 'enterprises.name as enterprise_name', 'spaces.building_name', 'spaces.room_number')
-            ->orderByRaw("CASE WHEN receivables.is_paid = 2 THEN 0 ELSE 1 END")
+            ->orderByRaw("CASE WHEN receivables.is_paid = 2 THEN 0 WHEN receivables.is_paid = 3 THEN 1 WHEN receivables.is_paid = 0 THEN 2 ELSE 3 END")
             ->orderBy('receivables.id', 'desc')
             ->get();
             
@@ -27,21 +23,48 @@ class FinanceController
     {
         $id = $request->post('id');
         $action = $request->post('action', 'approve'); 
+        $rejectReason = $request->post('reject_reason', '凭证不清晰或金额不符');
+
+        $bill = Db::table('receivables')->where('id', $id)->first();
+        if (!$bill) {
+            return json(['code' => 404, 'msg' => '流水不存在']);
+        }
 
         if ($action === 'reject') {
             Db::table('receivables')->where('id', $id)->update([
-                'is_paid' => 0,
-                'payment_method' => null,
-                'receipt_url' => null
+                'is_paid' => 3,
+                'reject_reason' => $rejectReason
             ]);
-            return json(['code' => 200, 'msg' => '凭证已驳回，已要求租户重新打款']);
+
+            // 消息触达：写入防扯皮驳回通知
+            Db::table('notifications')->insert([
+                'enterprise_id' => $bill->enterprise_id,
+                'title' => '打款凭证被驳回',
+                'content' => "您的账单(￥{$bill->amount})凭证被财务驳回。原因：{$rejectReason}。请重新上传。",
+                'is_read' => 0,
+                'created_at' => date('Y-m-d H:i:s')
+            ]);
+
+            // [落地扩展锚点] 可在此处利用 Webman/RedisQueue 发送模板消息或阿里云 SMS
+
+            return json(['code' => 200, 'msg' => '凭证已驳回，系统将下发站内信通知租户']);
         }
 
         Db::table('receivables')->where('id', $id)->update([
             'is_paid' => 1,
-            'paid_time' => date('Y-m-d H:i:s')
+            'paid_time' => date('Y-m-d H:i:s'),
+            'reject_reason' => null
         ]);
         
+        // 消息触达：核销结清通知
+        Db::table('notifications')->insert([
+            'enterprise_id' => $bill->enterprise_id,
+            'title' => '账单核销成功',
+            'content' => "您的账单(￥{$bill->amount})已完成财务核销结清。感谢您的配合。",
+            'is_read' => 0,
+            'created_at' => date('Y-m-d H:i:s')
+        ]);
+
         return json(['code' => 200, 'msg' => '账款已确认到账，核销成功']);
     }
 
@@ -76,6 +99,15 @@ class FinanceController
                     'is_paid' => 0,
                     'created_at' => date('Y-m-d H:i:s')
                 ]);
+
+                // 消息触达：实时出账预警
+                Db::table('notifications')->insert([
+                    'enterprise_id' => $contract->enterprise_id,
+                    'title' => '新账单出账提醒',
+                    'content' => "您的 {$month} 能耗费账单(￥{$amount})已生成，请在截止日期前进入服务门户处理。",
+                    'is_read' => 0,
+                    'created_at' => date('Y-m-d H:i:s')
+                ]);
             }
             
             Db::commit();
@@ -85,10 +117,6 @@ class FinanceController
             return json(['code' => 500, 'msg' => '生成账单失败']);
         }
     }
-
-    // ==========================================
-    // 区块二：核心扩容 - 退租清算单控制流
-    // ==========================================
 
     public function checkoutList(Request $request)
     {
@@ -113,11 +141,7 @@ class FinanceController
     public function payCheckout(Request $request)
     {
         $id = $request->post('id');
-        
-        Db::table('checkouts')->where('id', $id)->update([
-            'status' => 1
-        ]);
-        
+        Db::table('checkouts')->where('id', $id)->update(['status' => 1]);
         return json(['code' => 200, 'msg' => '退租清算单已彻底核销，流程完美闭环']);
     }
 }
