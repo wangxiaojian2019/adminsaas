@@ -1,18 +1,18 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-// 核心修复：彻底删除 import router from '../router'，根除循环依赖导致后台菜单消失的 Bug
 
 const service = axios.create({
     baseURL: 'http://47.120.52.65:8787', 
     timeout: 10000 
 })
 
-// 请求拦截器：动态装载 Token
+// 请求拦截器：动态装载独立 Token
 service.interceptors.request.use(
     config => {
         const currentUrl = window.location.href
         let token = null
 
+        // 核心修复：根据访问的终端不同，物理隔离提取 Token，防止串号
         if (currentUrl.includes('/h5/tenant')) {
             token = localStorage.getItem('h5_tenant_token')
         } else if (currentUrl.includes('/h5/worker') || currentUrl.includes('/h5/login')) {
@@ -29,21 +29,26 @@ service.interceptors.request.use(
     error => Promise.reject(error)
 )
 
-// 响应拦截器：全局错误处理与 401 剔除
+// 响应拦截器：全局错误处理与剔除
 service.interceptors.response.use(
     response => {
         const res = response.data
         
         if (res.code !== 200) {
+            // 静默处理消息轮询的异常，防控制台红字刷屏
+            if (response.config.url.includes('/notification/list')) {
+                return Promise.reject(new Error('Silent Polling Reject'))
+            }
+
             ElMessage.error(res.msg || '系统繁忙')
             
-            // 核心修复：401 鉴权失败拦截，使用原生 location 强物理跳转，避开 Router 死锁
-            if (res.code === 401) {
+            // 处理鉴权丢失与越权
+            if (res.code === 401 || res.code === 403) {
                 const currentUrl = window.location.href
                 
                 if (currentUrl.includes('/h5/tenant')) {
                     localStorage.removeItem('h5_tenant_token')
-                    localStorage.removeItem('h5_tenant_user') 
+                    localStorage.removeItem('tenant_info') 
                     window.location.href = '/h5/tenant/login'
                 } 
                 else if (currentUrl.includes('/h5/worker') || currentUrl.includes('/h5/login')) {

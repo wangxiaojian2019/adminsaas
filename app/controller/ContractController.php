@@ -17,62 +17,100 @@ class ContractController
         return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
 
+    // 核心重构：支持空间多选与自动化资产分拆
     public function add(Request $request)
     {
-        $spaceId = $request->post('space_id');
+        $spaceIds = $request->post('space_ids'); 
         $enterpriseId = $request->post('enterprise_id');
         
-        $space = Db::table('spaces')->where('id', $spaceId)->lockForUpdate()->first();
-        if ($space->status != 0) {
-            return json(['code' => 400, 'msg' => '业务拦截：该物理空间已被占用，无法重复签约']);
+        if (empty($spaceIds) || !is_array($spaceIds)) {
+            return json(['code' => 400, 'msg' => '业务拦截：请至少分配一个物理空间']);
         }
 
-        $startDate = $request->post('start_date');
-        $deposit = $request->post('deposit', 0);
+        $spaces = Db::table('spaces')->whereIn('id', $spaceIds)->lockForUpdate()->get();
+        $totalArea = 0;
+        foreach ($spaces as $sp) {
+            if ($sp->status != 0) {
+                return json(['code' => 400, 'msg' => "业务拦截：空间 {$sp->room_number} 已被占用，无法重复签约"]);
+            }
+            $totalArea += floatval($sp->area);
+        }
+        // 如果面积未填写，则按房间数量均分
+        if ($totalArea <= 0) $totalArea = count($spaces);
 
-        $data = [
-            'contract_no' => 'HT' . date('YmdHis') . rand(1000, 9999),
-            'enterprise_id' => $enterpriseId,
-            'space_id' => $spaceId,
-            'start_date' => $startDate,
-            'end_date' => $request->post('end_date'),
-            'monthly_rent' => $request->post('monthly_rent', 0),
-            'property_fee' => $request->post('property_fee', 0),
-            'payment_cycle' => $request->post('payment_cycle', 3), 
-            'next_bill_date' => $startDate,
-            'vehicle_info' => $request->post('vehicle_info', ''),
-            'deposit' => $deposit,
-            'status' => 1,
-            'created_at' => date('Y-m-d H:i:s')
-        ];
+        $startDate = $request->post('start_date');
+        $totalMonthlyRent = $request->post('monthly_rent', 0);
+        $totalPropertyFee = $request->post('property_fee', 0);
+        $totalDeposit = $request->post('deposit', 0);
+        $scannedFileUrl = $request->post('scanned_file_url', '');
         
+        $baseContractNo = 'HT' . date('YmdHis') . rand(100, 999);
+        $entName = Db::table('enterprises')->where('id', $enterpriseId)->value('name');
+
+        $allocatedRent = 0;
+        $allocatedProp = 0;
+        $allocatedDep = 0;
+
         Db::beginTransaction();
         try {
-            Db::table('contracts')->insert($data);
-            
-            $entName = Db::table('enterprises')->where('id', $enterpriseId)->value('name');
-            Db::table('spaces')->where('id', $spaceId)->update([
-                'status' => 1, 
-                'enterprise_name' => $entName
-            ]);
+            foreach ($spaces as $index => $sp) {
+                $isLast = ($index === count($spaces) - 1);
+                $ratio = floatval($sp->area) / $totalArea;
+                if ($totalArea == count($spaces)) $ratio = 1 / count($spaces);
 
-            if ($deposit > 0) {
-                Db::table('receivables')->insert([
+                // 最后一次循环用减法，防止除不尽导致的财务分毛误差
+                $rent = $isLast ? ($totalMonthlyRent - $allocatedRent) : round($totalMonthlyRent * $ratio, 2);
+                $prop = $isLast ? ($totalPropertyFee - $allocatedProp) : round($totalPropertyFee * $ratio, 2);
+                $dep = $isLast ? ($totalDeposit - $allocatedDep) : round($totalDeposit * $ratio, 2);
+
+                $allocatedRent += $rent;
+                $allocatedProp += $prop;
+                $allocatedDep += $dep;
+
+                Db::table('contracts')->insert([
+                    'contract_no' => count($spaces) > 1 ? $baseContractNo . '-' . ($index + 1) : $baseContractNo,
                     'enterprise_id' => $enterpriseId,
-                    'space_id' => $spaceId,
-                    'bill_type' => 6, 
-                    'amount' => $deposit,
-                    'due_date' => date('Y-m-d'), 
-                    'is_paid' => 0,
-                    'created_at' => date('Y-m-d H:i:s')
+                    'space_id' => $sp->id,
+                    'start_date' => $startDate,
+                    'billing_start_date' => $startDate,
+                    'end_date' => $request->post('end_date'),
+                    'monthly_rent' => $rent,
+                    'property_fee' => $prop,
+                    'payment_cycle' => $request->post('payment_cycle', 3), 
+                    'next_bill_date' => $startDate,
+                    'vehicle_info' => $request->post('vehicle_info', ''),
+                    'deposit' => $dep,
+                    'scanned_file_url' => $scannedFileUrl,
+                    'status' => 1,
+                    'parent_id' => 0,
+                    'alteration_type' => 0,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s')
                 ]);
+
+                Db::table('spaces')->where('id', $sp->id)->update([
+                    'status' => 1, 
+                    'enterprise_name' => $entName
+                ]);
+
+                if ($dep > 0) {
+                    Db::table('receivables')->insert([
+                        'enterprise_id' => $enterpriseId,
+                        'space_id' => $sp->id,
+                        'bill_type' => 6, 
+                        'amount' => $dep,
+                        'due_date' => date('Y-m-d'), 
+                        'is_paid' => 0,
+                        'created_at' => date('Y-m-d H:i:s')
+                    ]);
+                }
             }
             
             Db::commit();
-            return json(['code' => 200, 'msg' => 'success']);
+            return json(['code' => 200, 'msg' => '批量签约生单成功，租金/押金已按资产比例自动切分']);
         } catch (\Exception $e) {
             Db::rollBack();
-            return json(['code' => 500, 'msg' => '签约流转失败，已回滚数据']);
+            return json(['code' => 500, 'msg' => '流转失败：' . $e->getMessage()]);
         }
     }
 
@@ -89,7 +127,7 @@ class ContractController
                 'enterprise_name' => null
             ]);
             
-            Db::table('contracts')->where('id', $id)->update(['status' => 0]);
+            Db::table('contracts')->where('id', $id)->update(['status' => 0, 'updated_at' => date('Y-m-d H:i:s')]);
             
             Db::table('checkouts')->insert([
                 'contract_id' => $contract->id,
@@ -111,14 +149,12 @@ class ContractController
         }
     }
 
-    // 核心新增：撤销退租防误触引擎
     public function revokeTerminate(Request $request)
     {
         $contractId = $request->post('contract_id');
         $contract = Db::table('contracts')->where('id', $contractId)->first();
         if (!$contract) return json(['code' => 400, 'msg' => '合同不存在']);
 
-        // 拦截逻辑：查验财务核销状态
         $checkout = Db::table('checkouts')->where('contract_id', $contractId)->orderBy('id', 'desc')->first();
         if ($checkout && $checkout->status == 1) {
             return json(['code' => 400, 'msg' => '阻断：财务已完成该单据的打款结清，退租流程不可逆！']);
@@ -126,17 +162,14 @@ class ContractController
 
         Db::beginTransaction();
         try {
-            // 1. 恢复底层空间的占用状态
             $entName = Db::table('enterprises')->where('id', $contract->enterprise_id)->value('name');
             Db::table('spaces')->where('id', $contract->space_id)->update([
                 'status' => 1,
                 'enterprise_name' => $entName
             ]);
 
-            // 2. 恢复合同主表的履约状态
-            Db::table('contracts')->where('id', $contractId)->update(['status' => 1]);
+            Db::table('contracts')->where('id', $contractId)->update(['status' => 1, 'updated_at' => date('Y-m-d H:i:s')]);
 
-            // 3. 物理销毁作废的退租清单
             if ($checkout) {
                 Db::table('checkouts')->where('id', $checkout->id)->delete();
             }
@@ -166,5 +199,89 @@ class ContractController
             ['elec_contract_url' => $url, 'updated_at' => date('Y-m-d H:i:s')]
         );
         return json(['code' => 200, 'msg' => 'success']);
+    }
+
+    public function alterContract(Request $request)
+    {
+        $oldContractId = $request->post('old_contract_id');
+        $alterationType = $request->post('alteration_type'); 
+        $newSpaceId = $request->post('new_space_id');
+        
+        $physicalStartDate = $request->post('start_date');         
+        $billingStartDate = $request->post('billing_start_date');   
+        $endDate = $request->post('end_date');                     
+        
+        $monthlyRent = $request->post('monthly_rent');
+        $propertyFee = $request->post('property_fee', 0);
+        $scannedFileUrl = $request->post('scanned_file_url');       
+
+        Db::beginTransaction();
+        try {
+            $oldContract = Db::table('contracts')->where('id', $oldContractId)->first();
+            if (!$oldContract) {
+                return json(['code' => 404, 'msg' => '未找到原合同底档']);
+            }
+
+            Db::table('contracts')->where('id', $oldContractId)->update([
+                'status' => 0, 
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+
+            $targetSpaceId = $oldContract->space_id;
+            if ($alterationType == 3) {
+                if (!$newSpaceId) return json(['code' => 400, 'msg' => '园区内搬迁必须指定新物理空间']);
+                Db::table('spaces')->where('id', $oldContract->space_id)->update(['status' => 0, 'enterprise_name' => null]);
+                
+                $entName = Db::table('enterprises')->where('id', $oldContract->enterprise_id)->value('name');
+                Db::table('spaces')->where('id', $newSpaceId)->update(['status' => 1, 'enterprise_name' => $entName]);
+                $targetSpaceId = $newSpaceId;
+            }
+
+            Db::table('contracts')->insert([
+                'enterprise_id'      => $oldContract->enterprise_id,
+                'space_id'           => $targetSpaceId,
+                'parent_id'          => $oldContractId, 
+                'alteration_type'    => $alterationType,
+                'contract_no'        => $oldContract->contract_no . '-变更' . date('ymd'), 
+                'start_date'         => $physicalStartDate,
+                'billing_start_date' => $billingStartDate, 
+                'next_bill_date'     => $billingStartDate, 
+                'end_date'           => $endDate,
+                'monthly_rent'       => $monthlyRent,
+                'property_fee'       => $propertyFee,
+                'payment_cycle'      => $oldContract->payment_cycle,
+                'deposit'            => $oldContract->deposit, 
+                'scanned_file_url'   => $scannedFileUrl,   
+                'status'             => 1,                 
+                'created_at'         => date('Y-m-d H:i:s'),
+                'updated_at'         => date('Y-m-d H:i:s')
+            ]);
+
+            Db::commit();
+            return json(['code' => 200, 'msg' => '业务流转成功，重叠期与新档案已生效']);
+        } catch (\Exception $e) {
+            Db::rollBack();
+            return json(['code' => 500, 'msg' => '业务流转异常：' . $e->getMessage()]);
+        }
+    }
+
+    // 核心新增：提取资产生命周期与流转族谱
+    public function history(Request $request)
+    {
+        $id = $request->get('id');
+        $current = Db::table('contracts')->where('id', $id)->first();
+        if (!$current) return json(['code' => 404, 'msg' => '数据不存在']);
+
+        // 通过切片提取母本基准契约号，拉取完整的家族版本快照
+        $baseNo = explode('-变更', $current->contract_no)[0];
+
+        $history = Db::table('contracts')
+            ->leftJoin('spaces', 'contracts.space_id', '=', 'spaces.id')
+            ->where('contracts.contract_no', 'like', $baseNo . '%')
+            ->select('contracts.*', 'spaces.building_name', 'spaces.room_number')
+            ->orderBy('contracts.id', 'desc') // 按时间倒序，最新在上
+            ->get();
+
+        return json(['code' => 200, 'msg' => 'success', 'data' => $history]);
     }
 }

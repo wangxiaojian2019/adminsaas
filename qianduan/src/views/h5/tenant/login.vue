@@ -31,6 +31,7 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { OfficeBuilding, User, Lock } from '@element-plus/icons-vue'
 import request from '../../../utils/request'
 
 const router = useRouter()
@@ -50,8 +51,8 @@ const handleLogin = () => {
     try {
       const res = await request.post('/api/tenant/login', form)
       if (res.code === 200) {
-        // 与 PC 端共用 token 存储规范，拦截器无缝兼容
-        localStorage.setItem('saas_token', res.data.token)
+        // 核心修复：独立存储租户 Token，避免与 PC 管理端串号
+        localStorage.setItem('h5_tenant_token', res.data.token)
         localStorage.setItem('tenant_info', JSON.stringify(res.data.user_info))
         ElMessage.success('欢迎进入企业租户服务门户')
         router.push('/h5/tenant')
@@ -59,7 +60,7 @@ const handleLogin = () => {
         ElMessage.error(res.msg)
       }
     } catch (e) {
-      ElMessage.error('网络通讯阻断')
+      // 错误静默由拦截器处理
     } finally {
       loading.value = false
     }

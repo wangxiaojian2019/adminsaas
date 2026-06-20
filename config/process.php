@@ -40,6 +40,16 @@ return [
         'handler' => \app\process\BillingTask::class,
         'count' => 1, // 绝对单例模式，严禁并发，防止账单重复生成
     ],
+    
+    // ==========================================
+    // 架构升级：WebSocket 实时长连接通信基座
+    // ==========================================
+    'websocket' => [
+        'handler' => \app\process\Websocket::class,
+        'listen' => 'websocket://0.0.0.0:8788', 
+        'count' => 1, // 单例维护连接池对象
+    ],
+
     // File update detection and automatic reload
     'monitor' => [
         'handler' => app\process\Monitor::class,

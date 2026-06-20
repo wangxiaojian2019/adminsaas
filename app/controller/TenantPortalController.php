@@ -6,138 +6,126 @@ use support\Db;
 
 class TenantPortalController
 {
-    private function checkTenantAuth(Request $request)
-    {
-        if (!isset($request->enterprise_id) || empty($request->enterprise_id)) {
-            return false;
-        }
-        return $request->enterprise_id; 
-    }
-
+    /**
+     * 获取租户资产全局看板
+     */
     public function getOverview(Request $request)
     {
-        $entId = $this->checkTenantAuth($request);
-        if (!$entId) return json(['code' => 403, 'msg' => '非法越权访问拦截']);
-
-        $enterprise = Db::table('enterprises')->where('id', $entId)->first();
+        $enterpriseId = $request->enterprise_id;
+        $enterprise = Db::table('enterprises')->where('id', $enterpriseId)->first();
         
-        $contract = Db::table('contracts')
-            ->join('spaces', 'contracts.space_id', '=', 'spaces.id')
-            ->where('contracts.enterprise_id', $entId)
+        if (!$enterprise) {
+            return json(['code' => 404, 'msg' => '企业主体不存在']);
+        }
+
+        // 核心修改：模式一，聚合查询该企业名下【所有】生效中的独立合同及空间信息
+        $activeContracts = Db::table('contracts')
+            ->leftJoin('spaces', 'contracts.space_id', '=', 'spaces.id')
+            ->where('contracts.enterprise_id', $enterpriseId)
             ->where('contracts.status', 1)
-            ->select('contracts.*', 'spaces.building_name', 'spaces.room_number')
-            ->first();
+            ->select('contracts.*', 'spaces.building_name', 'spaces.room_number', 'spaces.floor', 'spaces.area')
+            ->orderBy('contracts.id', 'asc') // 按签约时间顺序展现
+            ->get();
 
         return json([
-            'code' => 200,
-            'msg' => 'success',
+            'code' => 200, 
+            'msg' => 'success', 
             'data' => [
                 'enterprise' => $enterprise,
-                'active_contract' => $contract
+                // 输出为数组列表，前端通过计算属性(computed)求和
+                'contracts' => $activeContracts 
             ]
         ]);
     }
 
     public function getBills(Request $request)
     {
-        $entId = $this->checkTenantAuth($request);
-        if (!$entId) return json(['code' => 403, 'msg' => '非法越权访问拦截']);
+        $enterpriseId = $request->enterprise_id;
+        
+        $bills = Db::table('receivables')
+            ->where('enterprise_id', $enterpriseId)
+            ->orderByRaw("CASE WHEN is_paid = 3 THEN 0 WHEN is_paid = 0 THEN 1 WHEN is_paid = 2 THEN 2 ELSE 3 END")
+            ->orderBy('due_date', 'asc')
+            ->get();
+            
+        return json(['code' => 200, 'msg' => 'success', 'data' => $bills]);
+    }
 
-        $list = Db::table('receivables')
-            ->where('enterprise_id', $entId)
-            ->orderByRaw("CASE WHEN is_paid = 0 THEN 0 WHEN is_paid = 2 THEN 1 ELSE 2 END")
+    public function getContracts(Request $request)
+    {
+        $enterpriseId = $request->enterprise_id;
+        $contracts = Db::table('contracts')
+            ->where('enterprise_id', $enterpriseId)
+            ->orderBy('status', 'desc')
             ->orderBy('id', 'desc')
             ->get();
             
-        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
+        return json(['code' => 200, 'msg' => 'success', 'data' => $contracts]);
     }
 
     public function payBill(Request $request)
     {
-        $entId = $this->checkTenantAuth($request);
-        if (!$entId) return json(['code' => 403, 'msg' => '非法越权访问拦截']);
-
+        $enterpriseId = $request->enterprise_id;
         $billId = $request->post('bill_id');
         $receiptUrl = $request->post('receipt_url');
 
-        if (empty($receiptUrl)) {
-            return json(['code' => 400, 'msg' => '阻断：必须提供转账凭证电子回单']);
+        if (!$receiptUrl) {
+            return json(['code' => 400, 'msg' => '必须上传打款凭证照片或截图']);
         }
 
-        $affected = Db::table('receivables')
-            ->where('id', $billId)
-            ->where('enterprise_id', $entId)
-            ->where('is_paid', 0)
-            ->update([
-                'is_paid' => 2, 
-                'receipt_url' => $receiptUrl,
-                'payment_method' => 'bank_transfer'
-            ]);
-
-        if ($affected) {
-            return json(['code' => 200, 'msg' => '凭证已安全上传，请等待园区财务核销！']);
+        $bill = Db::table('receivables')->where('id', $billId)->where('enterprise_id', $enterpriseId)->first();
+        if (!$bill) {
+            return json(['code' => 404, 'msg' => '账单防越权校验失败']);
         }
-        return json(['code' => 400, 'msg' => '账单已变更或系统校验失败']);
+
+        Db::table('receivables')->where('id', $billId)->update([
+            'is_paid' => 2, // 状态改为：待财务核销
+            'receipt_url' => $receiptUrl,
+            'updated_at' => date('Y-m-d H:i:s')
+        ]);
+
+        return json(['code' => 200, 'msg' => '打款凭证已提交，请等待财务中心核销。在核销完成前您无需重复缴费。']);
     }
 
-    // 核心新增：物业报修引擎
     public function submitOrder(Request $request)
     {
-        $entId = $this->checkTenantAuth($request);
-        if (!$entId) return json(['code' => 403, 'msg' => '非法越权访问拦截']);
-
-        $enterprise = Db::table('enterprises')->where('id', $entId)->first();
-        if (!$enterprise) return json(['code' => 400, 'msg' => '企业户籍丢失']);
-
+        $enterpriseId = $request->enterprise_id;
         $title = $request->post('title');
         $description = $request->post('description', '');
         $imageUrl = $request->post('image_url', '');
 
-        if (empty($title)) {
-            return json(['code' => 400, 'msg' => '报修故障简述不可为空']);
-        }
-
-        // 格式化证物图片拼接入描述中，以便 PC 端统一解析
-        if (!empty($imageUrl)) {
-            $description .= "\n\n【现场照片证物】: " . $imageUrl;
+        if (!$title) {
+            return json(['code' => 400, 'msg' => '故障简述为必填项']);
         }
 
         Db::table('work_orders')->insert([
+            'enterprise_id' => $enterpriseId,
             'title' => $title,
             'description' => $description,
-            'reporter_name' => $enterprise->name . ' (' . $enterprise->contact_person . ')',
-            'status' => 1, // 状态1：待中控室指派
+            'image_url' => $imageUrl,
+            'status' => 1, // 状态：待调度指派
             'created_at' => date('Y-m-d H:i:s')
         ]);
 
-        return json(['code' => 200, 'msg' => '报修工单已提交，中控调度中心将尽快安排专员处理！']);
+        return json(['code' => 200, 'msg' => '工单已流转至中控调度室，我们将尽快指派师傅上门处理']);
     }
 
-    // 核心新增：租户密码修改引擎
     public function updatePassword(Request $request)
     {
-        $entId = $this->checkTenantAuth($request);
-        if (!$entId) return json(['code' => 403, 'msg' => '非法越权访问拦截']);
-
+        $enterpriseId = $request->enterprise_id;
         $oldPwd = $request->post('old_password');
         $newPwd = $request->post('new_password');
 
-        if (empty($oldPwd) || empty($newPwd)) {
-            return json(['code' => 400, 'msg' => '密码字段不可为空']);
+        $enterprise = Db::table('enterprises')->where('id', $enterpriseId)->first();
+        if ($enterprise->password !== md5($oldPwd)) {
+            return json(['code' => 400, 'msg' => '原密码不正确，请重新输入']);
         }
 
-        $enterprise = Db::table('enterprises')->where('id', $entId)->first();
-
-        // 校验原密码
-        if (md5($oldPwd) !== $enterprise->password) {
-            return json(['code' => 400, 'msg' => '原密码验证失败，拒绝修改']);
-        }
-
-        // 执行更迭
-        Db::table('enterprises')->where('id', $entId)->update([
-            'password' => md5($newPwd)
+        Db::table('enterprises')->where('id', $enterpriseId)->update([
+            'password' => md5($newPwd),
+            'updated_at' => date('Y-m-d H:i:s')
         ]);
 
-        return json(['code' => 200, 'msg' => '安全密码修改成功，请妥善保管']);
+        return json(['code' => 200, 'msg' => '门户安全登录密码已更新，请使用新密码重新登入']);
     }
 }

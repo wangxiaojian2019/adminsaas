@@ -36,7 +36,6 @@ class FinanceController
                 'reject_reason' => $rejectReason
             ]);
 
-            // 消息触达：写入防扯皮驳回通知
             Db::table('notifications')->insert([
                 'enterprise_id' => $bill->enterprise_id,
                 'title' => '打款凭证被驳回',
@@ -45,7 +44,11 @@ class FinanceController
                 'created_at' => date('Y-m-d H:i:s')
             ]);
 
-            // [落地扩展锚点] 可在此处利用 Webman/RedisQueue 发送模板消息或阿里云 SMS
+            // 架构升级：WebSocket 毫无延迟强力推入企业端设备
+            \app\process\Websocket::sendToEnterprise($bill->enterprise_id, [
+                'type' => 'reject',
+                'msg' => '您的账单凭证刚刚被财务驳回，请重新补交！'
+            ]);
 
             return json(['code' => 200, 'msg' => '凭证已驳回，系统将下发站内信通知租户']);
         }
@@ -56,13 +59,18 @@ class FinanceController
             'reject_reason' => null
         ]);
         
-        // 消息触达：核销结清通知
         Db::table('notifications')->insert([
             'enterprise_id' => $bill->enterprise_id,
             'title' => '账单核销成功',
             'content' => "您的账单(￥{$bill->amount})已完成财务核销结清。感谢您的配合。",
             'is_read' => 0,
             'created_at' => date('Y-m-d H:i:s')
+        ]);
+
+        // 架构升级：WebSocket 秒级到账回执反馈
+        \app\process\Websocket::sendToEnterprise($bill->enterprise_id, [
+            'type' => 'notification',
+            'msg' => "账单(￥{$bill->amount})已完成核销结清"
         ]);
 
         return json(['code' => 200, 'msg' => '账款已确认到账，核销成功']);
@@ -100,13 +108,18 @@ class FinanceController
                     'created_at' => date('Y-m-d H:i:s')
                 ]);
 
-                // 消息触达：实时出账预警
                 Db::table('notifications')->insert([
                     'enterprise_id' => $contract->enterprise_id,
                     'title' => '新账单出账提醒',
                     'content' => "您的 {$month} 能耗费账单(￥{$amount})已生成，请在截止日期前进入服务门户处理。",
                     'is_read' => 0,
                     'created_at' => date('Y-m-d H:i:s')
+                ]);
+
+                // 架构升级：新账单生成直接强杀设备锁屏防沉睡
+                \app\process\Websocket::sendToEnterprise($contract->enterprise_id, [
+                    'type' => 'notification',
+                    'msg' => "您有一笔新的能耗费账单(￥{$amount})出账，请及时处理"
                 ]);
             }
             

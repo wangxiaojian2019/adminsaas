@@ -2,7 +2,6 @@
 use Webman\Route;
 use support\Response;
 
-// 1. 全局 OPTIONS 请求拦截与跨域头强力下发
 Route::options('[{path:.+}]', function () {
     return new Response(204, [
         'Access-Control-Allow-Origin' => '*',
@@ -61,6 +60,9 @@ Route::group('/api', function () {
     Route::post('/contracts/revoke_terminate', [app\controller\ContractController::class, 'revokeTerminate']); 
     Route::get('/contracts/docs', [app\controller\ContractController::class, 'docs']);
     Route::post('/contracts/generate_elec', [app\controller\ContractController::class, 'generateElec']);
+    Route::post('/contracts/alter', [app\controller\ContractController::class, 'alterContract']);
+    // 核心路由：获取资产合同族谱履历
+    Route::get('/contracts/history', [app\controller\ContractController::class, 'history']);
     
     Route::get('/finance/receivables/list', [app\controller\FinanceController::class, 'receivableList']);
     Route::post('/finance/receivables/pay', [app\controller\FinanceController::class, 'pay']);
@@ -79,7 +81,6 @@ Route::group('/api', function () {
     Route::post('/tenant/order/submit', [app\controller\TenantPortalController::class, 'submitOrder']); 
     Route::post('/tenant/password/update', [app\controller\TenantPortalController::class, 'updatePassword']); 
 
-    // 基层外勤端作业移动中台
     Route::get('/worker/tasks', [app\controller\WorkerPortalController::class, 'getTasks']);
     Route::post('/worker/tasks/complete', [app\controller\WorkerPortalController::class, 'completeTask']);
     Route::get('/worker/patrol/points', [app\controller\WorkerPortalController::class, 'getPatrolPoints']);
@@ -92,13 +93,9 @@ Route::group('/api', function () {
     Route::get('/patrol/records', [app\controller\PatrolController::class, 'records']);
     
     Route::get('/services/work-orders/list', [app\controller\WorkOrderController::class, 'list']);
-    Route::get('/services/workOrdersList', [app\controller\WorkOrderController::class, 'list']);
     Route::post('/services/work-orders/assign', [app\controller\WorkOrderController::class, 'assign']);
-    Route::post('/services/workOrdersAssign', [app\controller\WorkOrderController::class, 'assign']);
     Route::post('/services/work-orders/complete', [app\controller\WorkOrderController::class, 'complete']);
-    Route::post('/services/workOrdersComplete', [app\controller\WorkOrderController::class, 'complete']);
     Route::post('/services/work-orders/verify', [app\controller\WorkOrderController::class, 'verify']);
-    Route::post('/services/workOrdersVerify', [app\controller\WorkOrderController::class, 'verify']);
     Route::get('/services/staff/list', [app\controller\ServiceStaffController::class, 'list']);
     Route::post('/services/staff/add', [app\controller\ServiceStaffController::class, 'add']);
     Route::post('/services/staff/update', [app\controller\ServiceStaffController::class, 'update']);
@@ -106,9 +103,6 @@ Route::group('/api', function () {
 
     Route::post('/upload', [app\controller\UploadController::class, 'upload']);
 
-    // ==========================================
-    // 核心新增：消息触达引擎路由 (必须在鉴权组内部，因为 /api 前缀已由外层提供)
-    // ==========================================
     Route::get('/notification/list', [app\controller\NotificationController::class, 'list']);
     Route::post('/notification/read', [app\controller\NotificationController::class, 'read']);
 
@@ -120,7 +114,6 @@ Route::fallback(function (\support\Request $request) {
     return new Response(404, [
         'Content-Type' => 'application/json',
         'Access-Control-Allow-Origin' => '*',
-        'Access-Control-Allow-Methods' => 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-Requested-With, token'
-    ], json_encode(['code' => 404, 'msg' => '致命错误：后端接口地址不存在 -> ' . $request->path()]));
+        'Access-Control-Allow-Methods' => 'GET, POST, PUT, DELETE, OPTIONS'
+    ], json_encode(['code' => 404, 'msg' => '致命错误：接口地址不存在 -> ' . $request->path()]));
 });
