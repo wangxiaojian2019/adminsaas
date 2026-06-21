@@ -12,7 +12,8 @@ class FinanceController
             ->leftJoin('enterprises', 'receivables.enterprise_id', '=', 'enterprises.id')
             ->leftJoin('spaces', 'receivables.space_id', '=', 'spaces.id')
             ->select('receivables.*', 'enterprises.name as enterprise_name', 'spaces.building_name', 'spaces.room_number')
-            ->orderByRaw("CASE WHEN receivables.is_paid = 2 THEN 0 WHEN receivables.is_paid = 3 THEN 1 WHEN receivables.is_paid = 0 THEN 2 ELSE 3 END")
+            // 【优化排序逻辑】：1=已结清沉底，未结清(0,2,3)浮顶，然后严格按最新出账时间(id倒序)排列
+            ->orderByRaw("CASE WHEN receivables.is_paid = 1 THEN 1 ELSE 0 END")
             ->orderBy('receivables.id', 'desc')
             ->get();
             
@@ -26,9 +27,7 @@ class FinanceController
         $rejectReason = $request->post('reject_reason', '凭证不清晰或金额不符');
 
         $bill = Db::table('receivables')->where('id', $id)->first();
-        if (!$bill) {
-            return json(['code' => 404, 'msg' => '流水不存在']);
-        }
+        if (!$bill) return json(['code' => 404, 'msg' => '流水不存在']);
 
         if ($action === 'reject') {
             Db::table('receivables')->where('id', $id)->update([
@@ -101,7 +100,6 @@ class FinanceController
         return json(['code' => 200, 'msg' => '退租清算单已彻底核销，流程完美闭环']);
     }
 
-    // 引擎重构：将闭包降级为标准的级联 WHERE 语法，杜绝 ORM 解析崩溃
     public function meterList(Request $request)
     {
         $spaces = Db::table('spaces')
@@ -114,11 +112,11 @@ class FinanceController
         foreach ($spaces as $sp) {
             $lastWater = Db::table('meters')->where('space_id', $sp->space_id)->where('meter_type', 1)->orderBy('id', 'desc')->first();
             $sp->last_water = $lastWater ? floatval($lastWater->current_reading) : 0;
-            $sp->last_water_date = $lastWater ? date('Y-m-d', strtotime($lastWater->created_at)) : '无存档';
+            $sp->last_water_date = $lastWater ? date('Y-m-d H:i', strtotime($lastWater->created_at)) : '入驻初始底数';
 
             $lastElec = Db::table('meters')->where('space_id', $sp->space_id)->where('meter_type', 2)->orderBy('id', 'desc')->first();
             $sp->last_elec = $lastElec ? floatval($lastElec->current_reading) : 0;
-            $sp->last_elec_date = $lastElec ? date('Y-m-d', strtotime($lastElec->created_at)) : '无存档';
+            $sp->last_elec_date = $lastElec ? date('Y-m-d H:i', strtotime($lastElec->created_at)) : '入驻初始底数';
         }
         
         return json(['code' => 200, 'msg' => 'success', 'data' => $spaces]);
@@ -130,6 +128,9 @@ class FinanceController
         $entId = $request->post('enterprise_id');
         $meterType = $request->post('meter_type'); 
         $currentReading = floatval($request->post('current_reading'));
+        
+        // 【允许前台动态传参计费单价】
+        $price = floatval($request->post('price', $meterType == 1 ? 5.5 : 1.2));
 
         $lastMeter = Db::table('meters')->where('space_id', $spaceId)->where('meter_type', $meterType)->orderBy('id', 'desc')->first();
         $lastReading = $lastMeter ? floatval($lastMeter->current_reading) : 0;
@@ -143,8 +144,7 @@ class FinanceController
             return json(['code' => 400, 'msg' => '本期用量为0，无需生成账单，请检查是否抄表有误']);
         }
 
-        $rate = $meterType == 1 ? 5.5 : 1.2; 
-        $amount = round($usage * $rate, 2);
+        $amount = round($usage * $price, 2);
 
         Db::beginTransaction();
         try {
@@ -185,5 +185,20 @@ class FinanceController
             Db::rollBack();
             return json(['code' => 500, 'msg' => '抄表入账异常']);
         }
+    }
+
+    // 【专门拉取对应房间的抄表历史事件】
+    public function meterHistory(Request $request)
+    {
+        $spaceId = $request->get('space_id');
+        $meterType = $request->get('meter_type');
+        
+        $list = Db::table('meters')
+            ->where('space_id', $spaceId)
+            ->where('meter_type', $meterType)
+            ->orderBy('id', 'desc')
+            ->get();
+            
+        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
 }

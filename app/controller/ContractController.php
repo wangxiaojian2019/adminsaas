@@ -21,7 +21,7 @@ class ContractController
     {
         $spaceIds = $request->post('space_ids'); 
         $enterpriseId = $request->post('enterprise_id');
-        $metersData = $request->post('meters', []); // 接收前端传来的各房间期初底数
+        $metersData = $request->post('meters', []); 
         
         if (empty($spaceIds) || !is_array($spaceIds)) {
             return json(['code' => 400, 'msg' => '业务拦截：请至少分配一个物理空间']);
@@ -65,6 +65,17 @@ class ContractController
                 $allocatedProp += $prop;
                 $allocatedDep += $dep;
 
+                // 核心修改：将水电底数的提取提前，以便同步落入主表
+                $water = 0; $elec = 0;
+                if (is_array($metersData)) {
+                    foreach ($metersData as $md) {
+                        if (isset($md['id']) && $md['id'] == $sp->id) {
+                            $water = floatval($md['init_water'] ?? 0);
+                            $elec = floatval($md['init_elec'] ?? 0);
+                        }
+                    }
+                }
+
                 Db::table('contracts')->insert([
                     'contract_no' => count($spaces) > 1 ? $baseContractNo . '-' . ($index + 1) : $baseContractNo,
                     'enterprise_id' => $enterpriseId,
@@ -78,6 +89,8 @@ class ContractController
                     'next_bill_date' => $startDate,
                     'vehicle_info' => $request->post('vehicle_info', ''),
                     'deposit' => $dep,
+                    'water_meter' => $water,  // <--- 新增同步到合同表
+                    'electric_meter' => $elec, // <--- 新增同步到合同表
                     'scanned_file_url' => $scannedFileUrl,
                     'status' => 1,
                     'parent_id' => 0,
@@ -88,7 +101,9 @@ class ContractController
 
                 Db::table('spaces')->where('id', $sp->id)->update([
                     'status' => 1, 
-                    'enterprise_name' => $entName
+                    'enterprise_name' => $entName,
+                    'water_meter' => $water,  // <--- 新增同步到空间表
+                    'electric_meter' => $elec // <--- 新增同步到空间表
                 ]);
 
                 if ($dep > 0) {
@@ -103,17 +118,7 @@ class ContractController
                     ]);
                 }
 
-                // 核心写入：录入期初水电底数存档，规避财务抄表时的空指针异常
-                $water = 0; $elec = 0;
-                if (is_array($metersData)) {
-                    foreach ($metersData as $md) {
-                        if (isset($md['id']) && $md['id'] == $sp->id) {
-                            $water = floatval($md['init_water'] ?? 0);
-                            $elec = floatval($md['init_elec'] ?? 0);
-                        }
-                    }
-                }
-
+                // 保留原有的独立抄表本逻辑，用于后续物业计费引擎
                 Db::table('meters')->insert([
                     'space_id' => $sp->id,
                     'meter_type' => 1, 

@@ -137,9 +137,11 @@
               <div style="font-size: 11px; color: #c0c4cc;">最后存档: {{ row.last_water_date }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="水费核算操作" align="center" width="130">
+          
+          <el-table-column label="水费操作" align="center" width="160">
             <template #default="{ row }">
-              <el-button type="primary" plain size="small" @click="openMeterDialog(row, 1)">抄记水表</el-button>
+              <el-button type="primary" plain size="small" @click="openMeterDialog(row, 1)">抄记</el-button>
+              <el-button type="info" link size="small" @click="openHistoryDrawer(row, 1)">流水</el-button>
             </template>
           </el-table-column>
           
@@ -149,9 +151,11 @@
               <div style="font-size: 11px; color: #c0c4cc;">最后存档: {{ row.last_elec_date }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="电费核算操作" align="center" width="130">
+          
+          <el-table-column label="电费操作" align="center" width="160">
             <template #default="{ row }">
-              <el-button type="warning" plain size="small" @click="openMeterDialog(row, 2)">抄记电表</el-button>
+              <el-button type="warning" plain size="small" @click="openMeterDialog(row, 2)">抄记</el-button>
+              <el-button type="info" link size="small" @click="openHistoryDrawer(row, 2)">流水</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -192,14 +196,22 @@
     </el-dialog>
 
     <el-dialog v-model="meterDialogVisible" :title="`${currentMeter.building_name}-${currentMeter.room_number} 月度能耗抄表`" width="450px" @close="meterFormRef?.resetFields()">
+      
       <div style="background-color: #f0f9eb; padding: 15px; border-radius: 6px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e1f3d8;">
-        <span style="color: #67c23a; font-weight: bold;">系统上次存档底数：</span>
+        <div>
+           <div style="color: #67c23a; font-weight: bold;">系统上次存档底数</div>
+           <div style="font-size: 12px; color: #909399; margin-top: 4px;">上次抄表于: {{ lastMeterDate }}</div>
+        </div>
         <span style="font-size: 24px; font-weight: bold; color: #67c23a; font-family: monospace;">{{ lastMeterReading }}</span>
       </div>
 
       <el-form ref="meterFormRef" :model="meterForm" label-width="120px">
         <el-form-item label="本次表盘读数" prop="current_reading" :rules="[{ required: true, message: '不可为空' }]">
           <el-input-number v-model="meterForm.current_reading" :min="lastMeterReading" :precision="2" controls-position="right" style="width: 100%;" />
+        </el-form-item>
+        
+        <el-form-item label="计费单价(元)" prop="price" :rules="[{ required: true, message: '单价不可为空' }]">
+          <el-input-number v-model="meterForm.price" :min="0" :precision="2" :step="0.1" controls-position="right" style="width: 100%;" />
         </el-form-item>
         
         <div v-if="calculatedUsage > 0" class="calc-preview">
@@ -211,7 +223,9 @@
             <span>系统自动生单账单：</span>
             <span style="font-size: 20px; font-weight: bold;">¥ {{ calculatedCost }}</span>
           </div>
-          <div style="font-size: 11px; color: #909399; margin-top: 5px; text-align: right;">(当前计费标准: {{ meterForm.meter_type == 1 ? '水费 5.5元/吨' : '电费 1.2元/度' }})</div>
+          <div style="font-size: 11px; color: #909399; margin-top: 5px; text-align: right;">
+            (当前设定单价: {{ meterForm.price }} 元/{{ meterForm.meter_type == 1 ? '吨' : '度' }})
+          </div>
         </div>
       </el-form>
       <template #footer>
@@ -219,14 +233,34 @@
         <el-button type="primary" :disabled="calculatedUsage <= 0" :loading="submitLoading" @click="submitMeter">生成计费账单并结底存档</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="historyDrawerVisible" :title="`【${currentMeter.building_name}-${currentMeter.room_number}】${currentHistoryType === 1 ? '水表' : '电表'} 抄表记录`" size="400px">
+      <div v-loading="historyLoading" style="padding: 10px;">
+        <el-timeline>
+          <el-timeline-item
+            v-for="(item, index) in historyList"
+            :key="item.id"
+            :type="index === 0 ? 'success' : 'info'"
+            :timestamp="item.created_at"
+            placement="top"
+          >
+            <el-card shadow="hover" :style="{ border: index === 0 ? '1px solid #67c23a' : '' }">
+              <div style="font-weight: bold; font-size: 16px;">存档读数: {{ item.current_reading }}</div>
+              <div style="font-size: 12px; color: #909399; margin-top: 5px;">归属月份: {{ item.record_month }}</div>
+            </el-card>
+          </el-timeline-item>
+        </el-timeline>
+        <el-empty v-if="!historyLoading && historyList.length === 0" description="暂无抄表流水" />
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Check, Timer, Warning } from '@element-plus/icons-vue'
+import { Refresh, Warning, View, Select } from '@element-plus/icons-vue'
 import request from '../../utils/request'
 
 const route = useRoute()
@@ -336,14 +370,20 @@ const exportData = async () => {
   } catch (e) { ElMessage.error('导出失败') }
 }
 
+// ==========================
 // 抄表模块变量与动态算费
+// ==========================
 const meterDialogVisible = ref(false)
 const meterFormRef = ref(null)
 const currentMeter = ref({})
-const meterForm = reactive({ space_id: '', enterprise_id: '', meter_type: 1, current_reading: 0 })
+const meterForm = reactive({ space_id: '', enterprise_id: '', meter_type: 1, current_reading: 0, price: 0 })
 
+// 动态计算上次的底数和时间
 const lastMeterReading = computed(() => {
   return meterForm.meter_type === 1 ? currentMeter.value.last_water : currentMeter.value.last_elec
+})
+const lastMeterDate = computed(() => {
+  return meterForm.meter_type === 1 ? currentMeter.value.last_water_date : currentMeter.value.last_elec_date
 })
 
 const calculatedUsage = computed(() => {
@@ -352,8 +392,7 @@ const calculatedUsage = computed(() => {
 })
 
 const calculatedCost = computed(() => {
-  const rate = meterForm.meter_type === 1 ? 5.5 : 1.2
-  return (calculatedUsage.value * rate).toFixed(2)
+  return (calculatedUsage.value * meterForm.price).toFixed(2)
 })
 
 const openMeterDialog = (row, type) => {
@@ -362,6 +401,7 @@ const openMeterDialog = (row, type) => {
   meterForm.enterprise_id = row.enterprise_id
   meterForm.meter_type = type
   meterForm.current_reading = type === 1 ? row.last_water : row.last_elec
+  meterForm.price = type === 1 ? 5.5 : 1.2
   meterDialogVisible.value = true
 }
 
@@ -378,6 +418,31 @@ const submitMeter = () => {
       } else { ElMessage.error(res.msg) }
     } finally { submitLoading.value = false }
   })
+}
+
+// ==========================
+// 历史流水抽屉相关逻辑
+// ==========================
+const historyDrawerVisible = ref(false)
+const historyList = ref([])
+const historyLoading = ref(false)
+const currentHistoryType = ref(1)
+
+const openHistoryDrawer = async (row, type) => {
+  currentMeter.value = row
+  currentHistoryType.value = type
+  historyDrawerVisible.value = true
+  historyLoading.value = true
+  try {
+    const res = await request.get('/api/finance/meterHistory', { 
+        params: { space_id: row.space_id, meter_type: type } 
+    })
+    if (res.code === 200) {
+        historyList.value = res.data
+    }
+  } finally {
+    historyLoading.value = false
+  }
 }
 
 const getBillTypeLabel = (type) => ({ 1: '场地租金', 2: '水费出账', 3: '电费出账', 4: '物业/车位', 5: '违约滞纳金', 6: '履约押金' }[type] || '其他')

@@ -61,7 +61,9 @@ class EnterpriseController
                 if ($space && $space->status == 0) {
                     Db::table('spaces')->where('id', $spaceId)->update([
                         'status' => 1,
-                        'enterprise_name' => $request->post('name')
+                        'enterprise_name' => $request->post('name'),
+                        'water_meter' => $request->post('water_meter', 0),
+                        'electric_meter' => $request->post('electric_meter', 0)
                     ]);
                     
                     Db::table('contracts')->insert([
@@ -73,6 +75,8 @@ class EnterpriseController
                         'monthly_rent' => $request->post('monthly_rent', 0),
                         'property_fee' => $request->post('property_fee', 0),
                         'deposit' => $request->post('deposit', 0),
+                        'water_meter' => $request->post('water_meter', 0),
+                        'electric_meter' => $request->post('electric_meter', 0),
                         'vehicle_info' => '',
                         'status' => 1,
                         'created_at' => date('Y-m-d H:i:s')

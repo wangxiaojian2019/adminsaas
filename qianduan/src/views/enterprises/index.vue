@@ -101,19 +101,32 @@
           </el-form-item>
           
           <el-row :gutter="15">
-            <el-col :span="12">
+            <el-col :span="8">
               <el-form-item label="月租金(元)" prop="monthly_rent" :rules="[{ required: true, message: '必填', trigger: 'blur' }]">
                 <el-input-number v-model="formData.monthly_rent" :min="0" style="width: 100%;" controls-position="right" />
               </el-form-item>
             </el-col>
-            <el-col :span="12">
+            <el-col :span="8">
               <el-form-item label="月物业费(元)" prop="property_fee">
                 <el-input-number v-model="formData.property_fee" :min="0" style="width: 100%;" controls-position="right" />
               </el-form-item>
             </el-col>
-            <el-col :span="12">
+            <el-col :span="8">
               <el-form-item label="履约押金(元)" prop="deposit">
                 <el-input-number v-model="formData.deposit" :min="0" style="width: 100%;" controls-position="right" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-row :gutter="15">
+            <el-col :span="12">
+              <el-form-item label="初始水表(吨)" prop="water_meter">
+                <el-input-number v-model="formData.water_meter" :min="0" :precision="2" :step="0.1" style="width: 100%;" controls-position="right" placeholder="入驻交房时的水表读数" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="初始电表(度)" prop="electric_meter">
+                <el-input-number v-model="formData.electric_meter" :min="0" :precision="2" :step="0.1" style="width: 100%;" controls-position="right" placeholder="入驻交房时的电表读数" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -148,7 +161,11 @@ const bindSpaceInfo = ref('')
 
 const filterDateRange = ref([])
 
-const formData = reactive({ name: '', industry: '', contact_person: '', phone: '', space_id: null, dateRange: [], monthly_rent: 0, property_fee: 0, deposit: 0 })
+const formData = reactive({ 
+  name: '', industry: '', contact_person: '', phone: '', space_id: null, 
+  dateRange: [], monthly_rent: 0, property_fee: 0, deposit: 0,
+  water_meter: 0, electric_meter: 0 
+})
 
 const rules = {
   name: [{ required: true, message: '企业名称必填', trigger: 'blur' }],
@@ -197,6 +214,8 @@ const openDialog = () => {
   formData.monthly_rent = 0
   formData.property_fee = 0
   formData.deposit = 0
+  formData.water_meter = 0
+  formData.electric_meter = 0
   if (formRef.value) formRef.value.resetFields()
   loadAvailableSpaces()
   dialogVisible.value = true
@@ -249,6 +268,8 @@ onMounted(() => {
     formData.monthly_rent = 0
     formData.property_fee = 0
     formData.deposit = 0
+    formData.water_meter = 0
+    formData.electric_meter = 0
     bindSpaceInfo.value = `${route.query.b_name} - ${route.query.r_num}`
     dialogVisible.value = true
     router.replace('/enterprises')

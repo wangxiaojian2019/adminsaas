@@ -374,6 +374,13 @@
               <el-descriptions-item label="物理起租日期">
                 {{ currentContract.start_date }}
               </el-descriptions-item>
+
+              <el-descriptions-item label="期初水表底数">
+                <span class="text-primary" style="font-weight:bold;">{{ currentContract.water_meter || '0.00' }} 吨</span>
+              </el-descriptions-item>
+              <el-descriptions-item label="期初电表底数">
+                <span class="text-primary" style="font-weight:bold;">{{ currentContract.electric_meter || '0.00' }} 度</span>
+              </el-descriptions-item>
               <el-descriptions-item label="财务计费起始日">
                 <span class="text-warning" style="font-weight:bold;">{{ currentContract.billing_start_date || currentContract.start_date }}</span>
               </el-descriptions-item>
@@ -385,7 +392,7 @@
               </el-descriptions-item>
             </el-descriptions>
             <div style="margin-top: 20px; font-size: 12px; color: #909399;">
-              审计要求：请核对左侧系统生成的财务出账基准，是否与右侧企业方签章的纸质合同原件条款严格一致。
+              审计要求：请核对左侧系统生成的财务出账基准（包含初始水电），是否与右侧企业方签章的纸质合同原件条款严格一致。
             </div>
           </el-card>
         </el-col>
@@ -440,7 +447,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue' // 引入核心引擎 watch
+import { ref, reactive, computed, onMounted, watch } from 'vue' 
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { DocumentAdd, Download, Refresh, Document, Wallet, RefreshLeft, Monitor, Money, Printer, Plus, DocumentChecked, Switch, InfoFilled, Clock, View } from '@element-plus/icons-vue'
 import request from '../../utils/request'
@@ -459,7 +466,7 @@ const contractFormRef = ref(null)
 const contractForm = reactive({ 
   enterprise_id: '', 
   space_ids: [], 
-  meters: [], // 新增水电映射承载体
+  meters: [], 
   dateRange: [], 
   monthly_rent: 0, 
   property_fee: 0, 
@@ -469,7 +476,6 @@ const contractForm = reactive({
   scanned_file_url: '' 
 })
 
-// 核心重构：监听空间选择动作，动态生成强制抄表矩阵
 watch(() => contractForm.space_ids, (newVal) => {
   const newMeters = []
   if(newVal && newVal.length > 0) {
@@ -629,7 +635,7 @@ const openContractDialog = async () => {
   contractForm.payment_cycle = 3
   contractForm.scanned_file_url = ''
   contractForm.space_ids = [] 
-  contractForm.meters = [] // 核心：清理上一轮遗留的脏数据
+  contractForm.meters = [] 
   
   const entRes = await request.get('/api/enterprises/list')
   if (entRes.code === 200) enterprises.value = entRes.data

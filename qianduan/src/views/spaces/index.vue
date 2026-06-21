@@ -124,6 +124,9 @@
             <div class="info-item"><span class="label">履约周期：</span><span class="value">{{ currentRow.start_date }} 至 {{ currentRow.end_date }}</span></div>
             <div class="info-item"><span class="label">月度场地租金：</span><span class="value text-danger font-bold">￥{{ currentRow.monthly_rent }}</span></div>
             <div class="info-item"><span class="label">月度后勤物业：</span><span class="value">￥{{ currentRow.property_fee }}</span></div>
+            
+            <div class="info-item"><span class="label">当前水表底数：</span><span class="value text-primary font-bold">{{ currentRow.water_meter || '0.00' }} 吨</span></div>
+            <div class="info-item"><span class="label">当前电表底数：</span><span class="value text-primary font-bold">{{ currentRow.electric_meter || '0.00' }} 度</span></div>
             <div class="info-item full-width mt-10">
               <div class="price-highlight">
                 <span class="label">核心算法：日均摊核算单价</span>
