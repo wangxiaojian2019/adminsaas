@@ -44,7 +44,6 @@ class FinanceController
                 'created_at' => date('Y-m-d H:i:s')
             ]);
 
-            // 架构升级：WebSocket 毫无延迟强力推入企业端设备
             \app\process\Websocket::sendToEnterprise($bill->enterprise_id, [
                 'type' => 'reject',
                 'msg' => '您的账单凭证刚刚被财务驳回，请重新补交！'
@@ -67,68 +66,12 @@ class FinanceController
             'created_at' => date('Y-m-d H:i:s')
         ]);
 
-        // 架构升级：WebSocket 秒级到账回执反馈
         \app\process\Websocket::sendToEnterprise($bill->enterprise_id, [
             'type' => 'notification',
             'msg' => "账单(￥{$bill->amount})已完成核销结清"
         ]);
 
         return json(['code' => 200, 'msg' => '账款已确认到账，核销成功']);
-    }
-
-    public function recordMeter(Request $request)
-    {
-        $spaceId = $request->post('space_id');
-        $meterType = $request->post('meter_type');
-        $reading = $request->post('current_reading');
-        $month = $request->post('record_month');
-
-        Db::beginTransaction();
-        try {
-            Db::table('meters')->insert([
-                'space_id' => $spaceId,
-                'meter_type' => $meterType,
-                'current_reading' => $reading,
-                'record_month' => $month,
-                'created_at' => date('Y-m-d H:i:s')
-            ]);
-
-            $contract = Db::table('contracts')->where('space_id', $spaceId)->where('status', 1)->first();
-            if ($contract) {
-                $price = $meterType == 1 ? 5.5 : 1.2;
-                $amount = round($reading * $price, 2);
-                
-                Db::table('receivables')->insert([
-                    'enterprise_id' => $contract->enterprise_id,
-                    'space_id' => $spaceId,
-                    'bill_type' => $meterType == 1 ? 2 : 3, 
-                    'amount' => $amount,
-                    'due_date' => date('Y-m-t', strtotime($month . '-01')),
-                    'is_paid' => 0,
-                    'created_at' => date('Y-m-d H:i:s')
-                ]);
-
-                Db::table('notifications')->insert([
-                    'enterprise_id' => $contract->enterprise_id,
-                    'title' => '新账单出账提醒',
-                    'content' => "您的 {$month} 能耗费账单(￥{$amount})已生成，请在截止日期前进入服务门户处理。",
-                    'is_read' => 0,
-                    'created_at' => date('Y-m-d H:i:s')
-                ]);
-
-                // 架构升级：新账单生成直接强杀设备锁屏防沉睡
-                \app\process\Websocket::sendToEnterprise($contract->enterprise_id, [
-                    'type' => 'notification',
-                    'msg' => "您有一笔新的能耗费账单(￥{$amount})出账，请及时处理"
-                ]);
-            }
-            
-            Db::commit();
-            return json(['code' => 200, 'msg' => 'success']);
-        } catch (\Exception $e) {
-            Db::rollBack();
-            return json(['code' => 500, 'msg' => '生成账单失败']);
-        }
     }
 
     public function checkoutList(Request $request)
@@ -156,5 +99,91 @@ class FinanceController
         $id = $request->post('id');
         Db::table('checkouts')->where('id', $id)->update(['status' => 1]);
         return json(['code' => 200, 'msg' => '退租清算单已彻底核销，流程完美闭环']);
+    }
+
+    // 引擎重构：将闭包降级为标准的级联 WHERE 语法，杜绝 ORM 解析崩溃
+    public function meterList(Request $request)
+    {
+        $spaces = Db::table('spaces')
+            ->join('contracts', 'spaces.id', '=', 'contracts.space_id')
+            ->join('enterprises', 'contracts.enterprise_id', '=', 'enterprises.id')
+            ->where('contracts.status', 1)
+            ->select('spaces.id as space_id', 'spaces.building_name', 'spaces.room_number', 'enterprises.name as enterprise_name', 'contracts.enterprise_id')
+            ->get();
+
+        foreach ($spaces as $sp) {
+            $lastWater = Db::table('meters')->where('space_id', $sp->space_id)->where('meter_type', 1)->orderBy('id', 'desc')->first();
+            $sp->last_water = $lastWater ? floatval($lastWater->current_reading) : 0;
+            $sp->last_water_date = $lastWater ? date('Y-m-d', strtotime($lastWater->created_at)) : '无存档';
+
+            $lastElec = Db::table('meters')->where('space_id', $sp->space_id)->where('meter_type', 2)->orderBy('id', 'desc')->first();
+            $sp->last_elec = $lastElec ? floatval($lastElec->current_reading) : 0;
+            $sp->last_elec_date = $lastElec ? date('Y-m-d', strtotime($lastElec->created_at)) : '无存档';
+        }
+        
+        return json(['code' => 200, 'msg' => 'success', 'data' => $spaces]);
+    }
+
+    public function recordMeter(Request $request)
+    {
+        $spaceId = $request->post('space_id');
+        $entId = $request->post('enterprise_id');
+        $meterType = $request->post('meter_type'); 
+        $currentReading = floatval($request->post('current_reading'));
+
+        $lastMeter = Db::table('meters')->where('space_id', $spaceId)->where('meter_type', $meterType)->orderBy('id', 'desc')->first();
+        $lastReading = $lastMeter ? floatval($lastMeter->current_reading) : 0;
+
+        if ($currentReading < $lastReading) {
+            return json(['code' => 400, 'msg' => "业务拦截：本次读数({$currentReading}) 不能小于系统存档的上次底数({$lastReading})"]);
+        }
+
+        $usage = $currentReading - $lastReading;
+        if ($usage == 0) {
+            return json(['code' => 400, 'msg' => '本期用量为0，无需生成账单，请检查是否抄表有误']);
+        }
+
+        $rate = $meterType == 1 ? 5.5 : 1.2; 
+        $amount = round($usage * $rate, 2);
+
+        Db::beginTransaction();
+        try {
+            Db::table('meters')->insert([
+                'space_id' => $spaceId,
+                'meter_type' => $meterType,
+                'current_reading' => $currentReading,
+                'record_month' => date('Y-m'),
+                'created_at' => date('Y-m-d H:i:s')
+            ]);
+            
+            Db::table('receivables')->insert([
+                'enterprise_id' => $entId,
+                'space_id' => $spaceId,
+                'bill_type' => $meterType == 1 ? 2 : 3, 
+                'amount' => $amount,
+                'due_date' => date('Y-m-d', strtotime('+7 days')), 
+                'is_paid' => 0,
+                'created_at' => date('Y-m-d H:i:s')
+            ]);
+
+            Db::table('notifications')->insert([
+                'enterprise_id' => $entId,
+                'title' => '新账单出账提醒',
+                'content' => "您的能耗费账单(￥{$amount})已生成，请在截止日期前进入服务门户处理。",
+                'is_read' => 0,
+                'created_at' => date('Y-m-d H:i:s')
+            ]);
+
+            \app\process\Websocket::sendToEnterprise($entId, [
+                'type' => 'notification',
+                'msg' => "您有一笔新的能耗费账单(￥{$amount})出账，请及时处理"
+            ]);
+
+            Db::commit();
+            return json(['code' => 200, 'msg' => '抄表存档成功！已根据用量自动扣费生单，租户端将收到缴费提醒。']);
+        } catch (\Exception $e) {
+            Db::rollBack();
+            return json(['code' => 500, 'msg' => '抄表入账异常']);
+        }
     }
 }

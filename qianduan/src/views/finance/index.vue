@@ -1,6 +1,6 @@
 <template>
   <div class="finance-container">
-    <el-tabs v-model="activeTab" type="border-card" class="custom-tabs">
+    <el-tabs v-model="activeTab" type="border-card" class="custom-tabs" @tab-click="handleTabClick">
       
       <el-tab-pane label="常规应收账单中心" name="bills">
         <div class="toolbar">
@@ -12,7 +12,10 @@
           <el-table-column prop="id" label="单号" width="70" align="center" />
           <el-table-column prop="enterprise_name" label="付款方企业" min-width="160" show-overflow-tooltip />
           <el-table-column label="关联空间" width="140" align="center">
-            <template #default="{ row }">{{ row.building_name }} - {{ row.room_number }}</template>
+            <template #default="{ row }">
+              <span v-if="row.space_id">{{ row.building_name }} - {{ row.room_number }}</span>
+              <span v-else class="text-gray">公共/杂项</span>
+            </template>
           </el-table-column>
           <el-table-column label="费用科目" width="100" align="center">
             <template #default="{ row }">
@@ -44,7 +47,7 @@
           <el-table-column label="操作/核销记录" width="140" align="center" fixed="right">
             <template #default="{ row }">
               <el-button v-if="row.is_paid === 2" type="warning" link icon="View" @click="openReviewDialog(row)">审阅单据</el-button>
-              <el-popconfirm v-else-if="row.is_paid === 0 || row.is_paid === 3" title="确认收到线下款项并强制核销？" @confirm="handlePay(row.id, 'direct')">
+              <el-popconfirm v-else-if="row.is_paid === 0 || row.is_paid === 3" title="确认收到线下款项并强制核销？" @confirm="handlePay(row.id, 'approve')">
                 <template #reference>
                   <el-button type="primary" link icon="Select">强制核销</el-button>
                 </template>
@@ -95,7 +98,7 @@
           <el-table-column label="流程时间轴" width="160" align="center">
             <template #default="{ row }">
               <div class="timeline-text" title="业务员在前端发起退租作废操作的时间">发: {{ row.created_at }}</div>
-              <div v-if="row.status === 1" class="timeline-text text-success" title="财务确认打款或追缴结清的绝对时间">结: {{ row.paid_time }}</div>
+              <div v-if="row.status === 1" class="timeline-text text-success" title="财务确认打款或追缴结清的绝对时间">结: {{ row.updated_at }}</div>
               <div v-else class="timeline-text text-danger">结: 待财务核销</div>
             </template>
           </el-table-column>
@@ -116,10 +119,42 @@
       </el-tab-pane>
 
       <el-tab-pane label="后勤能耗抄表台账" name="meters">
-        <div class="toolbar">
-          <el-button type="primary" icon="EditPen" @click="openMeterDialog">现场读表推单</el-button>
+        <div class="toolbar" style="margin-bottom: 15px;">
+          <el-alert title="系统已自动提取租户入驻时填写的【期初底数】作为初始账本。每月抄表入账后，系统将自动算出差值并向企业推送水电账单。" type="warning" show-icon :closable="false" style="width: 100%" />
+          <el-button icon="Refresh" @click="fetchMeters" style="margin-left: 15px;">刷新台账</el-button>
         </div>
-        <el-empty description="抄表台账列表暂存，可通过上方推单引擎生成财务流水" />
+        <el-table :data="metersList" v-loading="metersLoading" border stripe style="width: 100%">
+          <el-table-column label="关联空间" width="150" align="center">
+            <template #default="{ row }">
+              <span style="font-weight: bold; color: #409eff;">{{ row.building_name }}-{{ row.room_number }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="enterprise_name" label="承租企业" min-width="180" show-overflow-tooltip />
+          
+          <el-table-column label="水表系统底数存档" align="center" width="220">
+            <template #default="{ row }">
+              <div style="font-size: 16px; font-weight: bold; color: #409eff;">{{ row.last_water }} <span style="font-size:12px;color:#909399;">吨</span></div>
+              <div style="font-size: 11px; color: #c0c4cc;">最后存档: {{ row.last_water_date }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="水费核算操作" align="center" width="130">
+            <template #default="{ row }">
+              <el-button type="primary" plain size="small" @click="openMeterDialog(row, 1)">抄记水表</el-button>
+            </template>
+          </el-table-column>
+          
+          <el-table-column label="电表系统底数存档" align="center" width="220">
+            <template #default="{ row }">
+              <div style="font-size: 16px; font-weight: bold; color: #e6a23c;">{{ row.last_elec }} <span style="font-size:12px;color:#909399;">度</span></div>
+              <div style="font-size: 11px; color: #c0c4cc;">最后存档: {{ row.last_elec_date }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="电费核算操作" align="center" width="130">
+            <template #default="{ row }">
+              <el-button type="warning" plain size="small" @click="openMeterDialog(row, 2)">抄记电表</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
       </el-tab-pane>
     </el-tabs>
 
@@ -156,39 +191,42 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="meterDialogVisible" title="后勤人员录入能耗表显" width="450px" @close="meterFormRef?.resetFields()">
-      <el-form ref="meterFormRef" :model="meterForm" :rules="meterRules" label-width="100px">
-        <el-form-item label="物理空间" prop="space_id">
-          <el-select v-model="meterForm.space_id" placeholder="请选择目标房间" style="width: 100%;">
-            <el-option v-for="item in spacesList" :key="item.id" :label="`${item.building_name} - ${item.room_number}`" :value="item.id" />
-          </el-select>
+    <el-dialog v-model="meterDialogVisible" :title="`${currentMeter.building_name}-${currentMeter.room_number} 月度能耗抄表`" width="450px" @close="meterFormRef?.resetFields()">
+      <div style="background-color: #f0f9eb; padding: 15px; border-radius: 6px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e1f3d8;">
+        <span style="color: #67c23a; font-weight: bold;">系统上次存档底数：</span>
+        <span style="font-size: 24px; font-weight: bold; color: #67c23a; font-family: monospace;">{{ lastMeterReading }}</span>
+      </div>
+
+      <el-form ref="meterFormRef" :model="meterForm" label-width="120px">
+        <el-form-item label="本次表盘读数" prop="current_reading" :rules="[{ required: true, message: '不可为空' }]">
+          <el-input-number v-model="meterForm.current_reading" :min="lastMeterReading" :precision="2" controls-position="right" style="width: 100%;" />
         </el-form-item>
-        <el-form-item label="仪表类型" prop="meter_type">
-          <el-radio-group v-model="meterForm.meter_type">
-            <el-radio :label="1">水表 (立方)</el-radio>
-            <el-radio :label="2">电表 (度)</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="本期读数" prop="current_reading">
-          <el-input v-model.number="meterForm.current_reading"><template #append>表显刻度</template></el-input>
-        </el-form-item>
-        <el-form-item label="归属账期" prop="record_month">
-          <el-date-picker v-model="meterForm.record_month" type="month" value-format="YYYY-MM" placeholder="例如：2026-06" style="width: 100%;" />
-        </el-form-item>
+        
+        <div v-if="calculatedUsage > 0" class="calc-preview">
+          <div style="display:flex; justify-content: space-between; margin-bottom: 10px;">
+            <span>本期消耗量推演：</span>
+            <span style="font-weight: bold;">{{ calculatedUsage }} {{ meterForm.meter_type == 1 ? '吨' : '度' }}</span>
+          </div>
+          <div style="display:flex; justify-content: space-between; align-items: center; color: #f56c6c;">
+            <span>系统自动生单账单：</span>
+            <span style="font-size: 20px; font-weight: bold;">¥ {{ calculatedCost }}</span>
+          </div>
+          <div style="font-size: 11px; color: #909399; margin-top: 5px; text-align: right;">(当前计费标准: {{ meterForm.meter_type == 1 ? '水费 5.5元/吨' : '电费 1.2元/度' }})</div>
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="meterDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitLoading" @click="submitMeter">记录并生成缴费单</el-button>
+        <el-button type="primary" :disabled="calculatedUsage <= 0" :loading="submitLoading" @click="submitMeter">生成计费账单并结底存档</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Warning } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh, Check, Timer, Warning } from '@element-plus/icons-vue'
 import request from '../../utils/request'
 
 const route = useRoute()
@@ -198,36 +236,8 @@ const activeTab = ref('bills')
 const submitLoading = ref(false)
 
 const billData = ref([]); const billLoading = ref(false)
-const spacesList = ref([])
-
 const checkoutData = ref([]); const checkoutLoading = ref(false)
-
-const reviewDialogVisible = ref(false)
-const currentReviewBill = ref({})
-const rejectReasonText = ref('') // 绑定驳回原因文本
-
-const meterDialogVisible = ref(false); const meterFormRef = ref(null)
-const meterForm = reactive({ space_id: '', meter_type: 1, current_reading: '', record_month: '' })
-const meterRules = {
-  space_id: [{ required: true, message: '必须绑定物理房间', trigger: 'change' }],
-  current_reading: [{ required: true, message: '读数不能为空', trigger: 'blur' }]
-}
-
-const getFullImgUrl = (url) => {
-  if (!url) return ''
-  return url.startsWith('http') ? url : `http://47.120.52.65:8787${url}`
-}
-
-const checkAutoReview = () => {
-  const targetId = route.query.review_bill_id
-  if (targetId) {
-    const bill = billData.value.find(item => item.id === Number(targetId))
-    if (bill && bill.is_paid === 2) {
-      activeTab.value = 'bills'
-      openReviewDialog(bill)
-    }
-  }
-}
+const metersList = ref([]); const metersLoading = ref(false)
 
 const fetchBills = async () => {
   billLoading.value = true
@@ -235,7 +245,6 @@ const fetchBills = async () => {
     const res = await request.get('/api/finance/receivables/list')
     if (res.code === 200) {
       billData.value = res.data
-      checkAutoReview() 
     }
   } finally { billLoading.value = false }
 }
@@ -250,26 +259,30 @@ const fetchCheckouts = async () => {
   } finally { checkoutLoading.value = false }
 }
 
-watch(() => route.query.review_bill_id, (newId) => {
-  if (newId) {
-    const targetBill = billData.value.find(item => item.id === Number(newId))
-    if (targetBill) {
-      activeTab.value = 'bills'
-      openReviewDialog(targetBill)
-    } else {
-      fetchBills()
-    }
-  }
-})
+const fetchMeters = async () => {
+  metersLoading.value = true
+  try {
+    const res = await request.get('/api/finance/meters/list')
+    if (res.code === 200) metersList.value = res.data
+  } finally { metersLoading.value = false }
+}
+
+const handleTabClick = (tab) => {
+  if (tab.paneName === 'checkouts') fetchCheckouts()
+  if (tab.paneName === 'meters') fetchMeters()
+}
+
+const reviewDialogVisible = ref(false)
+const currentReviewBill = ref({})
+const rejectReasonText = ref('') 
 
 const openReviewDialog = (row) => {
   currentReviewBill.value = row
-  rejectReasonText.value = '' // 初始化驳回原因
+  rejectReasonText.value = '' 
   reviewDialogVisible.value = true
 }
 
 const handlePay = async (id, action) => {
-  // 若执行驳回，必须进行二次确认拦截
   if (action === 'reject') {
     if (!rejectReasonText.value.trim()) {
       return ElMessage.warning('执行驳回必须填写驳回原因，以便通知租户。')
@@ -278,9 +291,7 @@ const handlePay = async (id, action) => {
       await ElMessageBox.confirm('确认将此凭证驳回，并通知租户重新打款吗？', '驳回风险提示', {
         type: 'warning', confirmButtonText: '坚决驳回', cancelButtonText: '再看看'
       })
-    } catch (e) {
-      return // 取消操作
-    }
+    } catch (e) { return }
   }
 
   try {
@@ -325,12 +336,33 @@ const exportData = async () => {
   } catch (e) { ElMessage.error('导出失败') }
 }
 
-const openMeterDialog = async () => {
-  const res = await request.get('/api/spaces/list')
-  if (res.code === 200) {
-    spacesList.value = res.data 
-    meterDialogVisible.value = true
-  }
+// 抄表模块变量与动态算费
+const meterDialogVisible = ref(false)
+const meterFormRef = ref(null)
+const currentMeter = ref({})
+const meterForm = reactive({ space_id: '', enterprise_id: '', meter_type: 1, current_reading: 0 })
+
+const lastMeterReading = computed(() => {
+  return meterForm.meter_type === 1 ? currentMeter.value.last_water : currentMeter.value.last_elec
+})
+
+const calculatedUsage = computed(() => {
+  const diff = Number(meterForm.current_reading) - Number(lastMeterReading.value)
+  return diff > 0 ? Number(diff.toFixed(2)) : 0
+})
+
+const calculatedCost = computed(() => {
+  const rate = meterForm.meter_type === 1 ? 5.5 : 1.2
+  return (calculatedUsage.value * rate).toFixed(2)
+})
+
+const openMeterDialog = (row, type) => {
+  currentMeter.value = row
+  meterForm.space_id = row.space_id
+  meterForm.enterprise_id = row.enterprise_id
+  meterForm.meter_type = type
+  meterForm.current_reading = type === 1 ? row.last_water : row.last_elec
+  meterDialogVisible.value = true
 }
 
 const submitMeter = () => {
@@ -340,21 +372,20 @@ const submitMeter = () => {
     try {
       const res = await request.post('/api/finance/meters/record', meterForm)
       if (res.code === 200) {
-        ElMessage.success('表显已录入，系统已向所属企业派发能耗账单')
+        ElMessage.success(res.msg)
         meterDialogVisible.value = false
-        activeTab.value = 'bills' 
-        fetchBills()
+        fetchMeters() 
       } else { ElMessage.error(res.msg) }
     } finally { submitLoading.value = false }
   })
 }
 
-const getBillTypeLabel = (type) => ({ 1: '场地租金', 2: '水费账单', 3: '电费账单', 4: '物业/车位', 5: '违约滞纳金', 6: '履约押金' }[type] || '其他')
+const getBillTypeLabel = (type) => ({ 1: '场地租金', 2: '水费出账', 3: '电费出账', 4: '物业/车位', 5: '违约滞纳金', 6: '履约押金' }[type] || '其他')
 const getBillTypeColor = (type) => ({ 1: 'primary', 2: 'info', 3: 'warning', 4: 'success', 5: 'danger', 6: 'info' }[type] || 'info')
+const getFullImgUrl = (url) => url.startsWith('http') ? url : `http://47.120.52.65:8787${url}`
 
 onMounted(() => {
   fetchBills()
-  fetchCheckouts()
 })
 </script>
 
@@ -372,4 +403,6 @@ onMounted(() => {
 .receipt-img { width: 100%; max-height: 40vh; border: 1px dashed #d9d9d9; border-radius: 8px; cursor: pointer; object-fit: contain; }
 .review-info { margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: left; }
 .review-info p { margin: 5px 0; font-size: 14px; color: #303133; }
+
+.calc-preview { background-color: #fdf6ec; border: 1px solid #faecd8; padding: 15px; border-radius: 6px; margin-top: 15px; font-size: 14px; color: #e6a23c; }
 </style>

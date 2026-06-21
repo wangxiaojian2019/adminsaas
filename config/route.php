@@ -65,9 +65,10 @@ Route::group('/api', function () {
     
     Route::get('/finance/receivables/list', [app\controller\FinanceController::class, 'receivableList']);
     Route::post('/finance/receivables/pay', [app\controller\FinanceController::class, 'pay']);
-    Route::post('/finance/meters/record', [app\controller\FinanceController::class, 'recordMeter']);
     Route::get('/finance/checkouts/list', [app\controller\FinanceController::class, 'checkoutList']);
     Route::post('/finance/checkouts/pay', [app\controller\FinanceController::class, 'payCheckout']);
+    Route::get('/finance/meters/list', [app\controller\FinanceController::class, 'meterList']);
+    Route::post('/finance/meters/record', [app\controller\FinanceController::class, 'recordMeter']);
     
     Route::get('/reports/finance', [app\controller\ReportController::class, 'financeStats']);
     Route::get('/reports/leads', [app\controller\ReportController::class, 'leadStats']);
@@ -87,8 +88,6 @@ Route::group('/api', function () {
     Route::post('/worker/patrol/submit', [app\controller\WorkerPortalController::class, 'submitPatrol']);
     Route::post('/worker/password/update', [app\controller\WorkerPortalController::class, 'updatePassword']); 
     Route::get('/worker/inventory', [app\controller\WorkerPortalController::class, 'getInventory']);
-    
-    // 核心新增：员工通知系统
     Route::get('/worker/notifications', [app\controller\WorkerPortalController::class, 'getNotifications']);
     Route::post('/worker/notifications/read', [app\controller\WorkerPortalController::class, 'readNotification']);
     
@@ -116,6 +115,7 @@ Route::group('/api', function () {
     Route::post('/inventory/action', [app\controller\InventoryController::class, 'action']);
     Route::get('/inventory/records', [app\controller\InventoryController::class, 'records']);
 
+// 仅保留鉴权中间件，废弃会导致双重跨域头的 CorsCheck
 })->middleware([
     app\middleware\AuthMiddleware::class
 ]);
