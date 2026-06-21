@@ -23,7 +23,8 @@ const routes = [
       { path: 'finance', name: 'Finance', component: () => import('../views/finance/index.vue'), meta: { title: '业财一体化中心' } },
       { path: 'patrol', name: 'Patrol', component: () => import('../views/patrol/index.vue'), meta: { title: '智能安防巡检' } },
       { path: 'services', name: 'Services', component: () => import('../views/services/index.vue'), meta: { title: '基层服务人员管理' } },
-      { path: 'reports', name: 'Reports', component: () => import('../views/reports/index.vue'), meta: { title: '报表与 BI 中心' } }
+      { path: 'reports', name: 'Reports', component: () => import('../views/reports/index.vue'), meta: { title: '报表与 BI 中心' } },
+      { path: 'inventory', name: 'Inventory', component: () => import('../views/inventory/index.vue'), meta: { title: '仓库与物料' } }
     ]
   }
 ]

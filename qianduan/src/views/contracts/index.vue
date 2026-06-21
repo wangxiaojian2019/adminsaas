@@ -68,7 +68,7 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="contractDialogVisible" title="起草/扩签新合同 (支持批量锁房分单)" width="680px" @close="contractFormRef?.resetFields()">
+    <el-dialog v-model="contractDialogVisible" title="起草/扩签新合同 (支持批量锁房与水电基数建账)" width="680px" @close="contractFormRef?.resetFields()">
       <div class="sandbox-tips" style="margin-top: -10px;">
         <el-icon><InfoFilled /></el-icon> 
         批量勾选多个房间并输入总价，底层资产引擎将按面积自动等比切割为多份独立合同，实现资产精细化解耦。
@@ -86,6 +86,25 @@
             <el-option v-for="sp in availableSpaces" :key="sp.id" :label="`${sp.building_name} - ${sp.floor}F - ${sp.room_number} (${sp.area}㎡)`" :value="sp.id" />
           </el-select>
         </el-form-item>
+
+        <div v-if="contractForm.meters.length > 0" class="meters-input-panel">
+          <div class="panel-header">
+            <el-icon><Monitor /></el-icon> 强制要求：请抄录入驻房间的【期初水电底数】用于后续计费扣算
+          </div>
+          <el-table :data="contractForm.meters" size="small" border style="width: 100%;">
+            <el-table-column prop="room_number" label="物理房间" width="120" />
+            <el-table-column label="期初水表 (吨)">
+              <template #default="{ row }">
+                <el-input-number v-model="row.init_water" :min="0" :precision="2" controls-position="right" style="width: 100%" />
+              </template>
+            </el-table-column>
+            <el-table-column label="期初电表 (度)">
+              <template #default="{ row }">
+                <el-input-number v-model="row.init_elec" :min="0" :precision="2" controls-position="right" style="width: 100%" />
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
 
         <el-form-item label="合同周期" prop="dateRange">
           <el-date-picker v-model="contractForm.dateRange" type="daterange" range-separator="至" start-placeholder="起租日" end-placeholder="到期日" value-format="YYYY-MM-DD" style="width: 100%;" />
@@ -421,7 +440,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue' // 引入核心引擎 watch
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { DocumentAdd, Download, Refresh, Document, Wallet, RefreshLeft, Monitor, Money, Printer, Plus, DocumentChecked, Switch, InfoFilled, Clock, View } from '@element-plus/icons-vue'
 import request from '../../utils/request'
@@ -440,6 +459,7 @@ const contractFormRef = ref(null)
 const contractForm = reactive({ 
   enterprise_id: '', 
   space_ids: [], 
+  meters: [], // 新增水电映射承载体
   dateRange: [], 
   monthly_rent: 0, 
   property_fee: 0, 
@@ -448,6 +468,24 @@ const contractForm = reactive({
   deposit: 0,
   scanned_file_url: '' 
 })
+
+// 核心重构：监听空间选择动作，动态生成强制抄表矩阵
+watch(() => contractForm.space_ids, (newVal) => {
+  const newMeters = []
+  if(newVal && newVal.length > 0) {
+      newVal.forEach(id => {
+        const sp = availableSpaces.value.find(s => s.id === id)
+        const existing = contractForm.meters.find(m => m.id === id)
+        newMeters.push({
+          id: id,
+          room_number: sp ? `${sp.building_name}-${sp.room_number}` : '未知',
+          init_water: existing ? existing.init_water : 0,
+          init_elec: existing ? existing.init_elec : 0
+        })
+      })
+  }
+  contractForm.meters = newMeters
+}, { deep: true })
 
 const isCustomCycle = ref(false)
 const customCycleValue = ref(1)
@@ -591,6 +629,7 @@ const openContractDialog = async () => {
   contractForm.payment_cycle = 3
   contractForm.scanned_file_url = ''
   contractForm.space_ids = [] 
+  contractForm.meters = [] // 核心：清理上一轮遗留的脏数据
   
   const entRes = await request.get('/api/enterprises/list')
   if (entRes.code === 200) enterprises.value = entRes.data
@@ -742,6 +781,9 @@ onMounted(() => { fetchContracts() })
 .filter-panel { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; padding: 12px 15px; background-color: #f8f9fa; border-radius: 6px; border: 1px solid #eef1f6; }
 .filter-item { display: flex; align-items: center; gap: 8px; }
 .filter-label { font-size: 13px; color: #606266; font-weight: bold; }
+
+.meters-input-panel { border-left: 3px solid #409eff; }
+.panel-header { font-size: 13px; color: #409eff; font-weight: bold; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;}
 
 .contract-uploader { border: 1px dashed #d9d9d9; border-radius: 6px; cursor: pointer; position: relative; overflow: hidden; width: 100%; height: 160px; background-color: #fafafa; display: flex; justify-content: center; align-items: center; }
 .contract-uploader:hover { border-color: #409EFF; }

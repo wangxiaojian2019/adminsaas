@@ -17,11 +17,11 @@ class ContractController
         return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
 
-    // 核心重构：支持空间多选与自动化资产分拆
     public function add(Request $request)
     {
         $spaceIds = $request->post('space_ids'); 
         $enterpriseId = $request->post('enterprise_id');
+        $metersData = $request->post('meters', []); // 接收前端传来的各房间期初底数
         
         if (empty($spaceIds) || !is_array($spaceIds)) {
             return json(['code' => 400, 'msg' => '业务拦截：请至少分配一个物理空间']);
@@ -35,7 +35,6 @@ class ContractController
             }
             $totalArea += floatval($sp->area);
         }
-        // 如果面积未填写，则按房间数量均分
         if ($totalArea <= 0) $totalArea = count($spaces);
 
         $startDate = $request->post('start_date');
@@ -58,7 +57,6 @@ class ContractController
                 $ratio = floatval($sp->area) / $totalArea;
                 if ($totalArea == count($spaces)) $ratio = 1 / count($spaces);
 
-                // 最后一次循环用减法，防止除不尽导致的财务分毛误差
                 $rent = $isLast ? ($totalMonthlyRent - $allocatedRent) : round($totalMonthlyRent * $ratio, 2);
                 $prop = $isLast ? ($totalPropertyFee - $allocatedProp) : round($totalPropertyFee * $ratio, 2);
                 $dep = $isLast ? ($totalDeposit - $allocatedDep) : round($totalDeposit * $ratio, 2);
@@ -104,10 +102,37 @@ class ContractController
                         'created_at' => date('Y-m-d H:i:s')
                     ]);
                 }
+
+                // 核心写入：录入期初水电底数存档，规避财务抄表时的空指针异常
+                $water = 0; $elec = 0;
+                if (is_array($metersData)) {
+                    foreach ($metersData as $md) {
+                        if (isset($md['id']) && $md['id'] == $sp->id) {
+                            $water = floatval($md['init_water'] ?? 0);
+                            $elec = floatval($md['init_elec'] ?? 0);
+                        }
+                    }
+                }
+
+                Db::table('meters')->insert([
+                    'space_id' => $sp->id,
+                    'meter_type' => 1, 
+                    'current_reading' => $water,
+                    'record_month' => date('Y-m', strtotime($startDate)),
+                    'created_at' => date('Y-m-d H:i:s')
+                ]);
+
+                Db::table('meters')->insert([
+                    'space_id' => $sp->id,
+                    'meter_type' => 2, 
+                    'current_reading' => $elec,
+                    'record_month' => date('Y-m', strtotime($startDate)),
+                    'created_at' => date('Y-m-d H:i:s')
+                ]);
             }
             
             Db::commit();
-            return json(['code' => 200, 'msg' => '批量签约生单成功，租金/押金已按资产比例自动切分']);
+            return json(['code' => 200, 'msg' => '批量签约生单成功，租金、押金及期初水电已按资产比例切割落表']);
         } catch (\Exception $e) {
             Db::rollBack();
             return json(['code' => 500, 'msg' => '流转失败：' . $e->getMessage()]);
@@ -265,21 +290,19 @@ class ContractController
         }
     }
 
-    // 核心新增：提取资产生命周期与流转族谱
     public function history(Request $request)
     {
         $id = $request->get('id');
         $current = Db::table('contracts')->where('id', $id)->first();
         if (!$current) return json(['code' => 404, 'msg' => '数据不存在']);
 
-        // 通过切片提取母本基准契约号，拉取完整的家族版本快照
         $baseNo = explode('-变更', $current->contract_no)[0];
 
         $history = Db::table('contracts')
             ->leftJoin('spaces', 'contracts.space_id', '=', 'spaces.id')
             ->where('contracts.contract_no', 'like', $baseNo . '%')
             ->select('contracts.*', 'spaces.building_name', 'spaces.room_number')
-            ->orderBy('contracts.id', 'desc') // 按时间倒序，最新在上
+            ->orderBy('contracts.id', 'desc') 
             ->get();
 
         return json(['code' => 200, 'msg' => 'success', 'data' => $history]);

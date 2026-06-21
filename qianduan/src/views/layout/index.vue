@@ -15,6 +15,7 @@
         <el-menu-item index="/patrol"><el-icon><Aim /></el-icon><span>10. 智能安防巡检</span></el-menu-item>
         <el-menu-item index="/services"><el-icon><Service /></el-icon><span>11. 基层服务人员管理</span></el-menu-item>
         <el-menu-item index="/reports"><el-icon><DataLine /></el-icon><span>12. 报表与 BI 中心</span></el-menu-item>
+        <el-menu-item index="/inventory"><el-icon><Box /></el-icon><span>13. 后勤仓库与物料</span></el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -41,6 +42,11 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElNotification } from 'element-plus'
+import { 
+  Odometer, Setting, OfficeBuilding, School, Van, User, 
+  Memo, Document, Money, Aim, Service, DataLine, Box, 
+  UserFilled, SwitchButton 
+} from '@element-plus/icons-vue' // 确保引入了新图标 Box
 import request from '../../utils/request'
 
 const router = useRouter()
@@ -125,7 +131,7 @@ onUnmounted(() => {
 .layout-container { height: 100vh; }
 .aside { background-color: #2c3e50; color: #fff; display: flex; flex-direction: column; }
 .logo { height: 60px; line-height: 60px; text-align: center; font-size: 18px; font-weight: bold; background-color: #1e2b3c; }
-.el-menu { border-right: none; flex: 1; }
+.el-menu { border-right: none; flex: 1; overflow-y: auto; }
 .header { background-color: #fff; border-bottom: 1px solid #eef1f6; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; height: 60px; }
 .header-left .page-title { font-size: 18px; font-weight: bold; color: #303133; }
 .header-right { display: flex; align-items: center; cursor: pointer; }

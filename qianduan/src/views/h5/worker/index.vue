@@ -1,20 +1,48 @@
 <template>
   <div class="mobile-container" v-if="userInfo.id">
     <div class="mobile-header">
-      <div class="user-greeting">
-        <h3 style="display: flex; align-items: center; gap: 8px;">
-          {{ userInfo.real_name || '员工' }} 
-          <el-tag size="small" type="warning" effect="dark" style="border-radius: 12px; border: none;">
-            {{ userInfo.position || '外勤人员' }}
-          </el-tag>
-        </h3>
-        <p><el-icon><Iphone /></el-icon> 账号: {{ userInfo.username }}</p>
+      <div class="header-top-row" style="display:flex; justify-content: space-between; align-items:flex-start; width: 100%;">
+        <div class="user-greeting">
+          <h3 style="display: flex; align-items: center; gap: 8px;">
+            {{ userInfo.real_name || '员工' }} 
+            <el-tag size="small" type="warning" effect="dark" style="border-radius: 12px; border: none;">
+              {{ userInfo.position || '外勤人员' }}
+            </el-tag>
+          </h3>
+          <p><el-icon><Iphone /></el-icon> 账号: {{ userInfo.username }}</p>
+        </div>
+        
+        <div class="header-actions">
+          <div class="msg-bell" @click="openMsgDrawer">
+            <el-badge :value="unreadCount" :hidden="unreadCount === 0" :max="99">
+              <el-icon :size="24" color="#ffffff"><BellFilled /></el-icon>
+            </el-badge>
+          </div>
+        </div>
       </div>
-      <el-button v-if="activeTab === 'orders'" type="danger" link @click="handleLogout" style="color: #ffcccc;">交班退出</el-button>
+      <el-button v-if="activeTab === 'orders'" type="danger" link @click="handleLogout" style="color: #ffcccc; margin-top: 10px;">交班退出</el-button>
     </div>
 
     <div v-show="activeTab === 'orders'" class="h5-content">
-      <div class="responsibility-card">
+      
+      <div v-if="pendingReturns.length > 0" class="responsibility-card" style="border: 1px solid #faecd8; background-color: #fdf6ec; margin-top: -25px; margin-bottom: 15px; position: relative; z-index: 10;">
+        <div class="resp-title" style="color: #e6a23c; margin-bottom: 12px;">
+          <el-icon><Box /></el-icon> 待归还物资提醒 ({{ pendingReturns.length }} 件)
+        </div>
+        <div v-for="inv in pendingReturns" :key="'ret-'+inv.id" class="quick-bill-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed #faecd8;">
+          <div class="qb-info">
+            <div class="qb-title" style="margin-bottom: 4px;">
+              <span class="qb-amount" style="color: #e6a23c; font-weight: bold; font-size: 15px;">{{ inv.item_name }}</span>
+              <span style="font-size: 14px; margin-left: 10px; font-weight: bold; color: #f56c6c;">x{{ inv.quantity }}{{ inv.unit }}</span>
+            </div>
+            <div class="qb-date text-danger" v-if="inv.expected_return_date" style="font-size: 12px; color: #f56c6c;">
+              <el-icon><Timer /></el-icon> 应于 {{ inv.expected_return_date }} 前归还
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="responsibility-card" :style="{ marginTop: pendingReturns.length > 0 ? '0' : '-25px' }">
         <div class="resp-title"><el-icon><List /></el-icon> 我的岗位职责</div>
         <div class="resp-content">
           {{ userInfo.responsibility || '系统暂未配置您的详细岗位职责。' }}
@@ -84,6 +112,34 @@
       </div>
     </div>
 
+    <div v-show="activeTab === 'inventory'" class="h5-content profile-wrapper" style="margin-top: -30px;">
+      <div class="responsibility-card title-card" style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+        <span class="resp-title" style="margin:0;"><el-icon><Box /></el-icon> 我的后勤物资库</span>
+        <el-tag size="small" type="primary" effect="light">{{ inventoryList.length }} 笔记录</el-tag>
+      </div>
+
+      <el-empty v-if="inventoryList.length === 0" description="暂无库房领用或外借记录" :image-size="80" class="responsibility-card" />
+
+      <div v-for="inv in inventoryList" :key="inv.id" class="task-card" style="border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.04);">
+        <div class="task-header" style="border-bottom: 1px dashed #ebeef5; padding-bottom: 12px;">
+          <span class="task-title" style="font-size: 16px;">{{ inv.item_name }}</span>
+          <el-tag size="small" :type="inv.action_type === 3 ? 'warning' : (inv.action_type === 2 ? 'danger' : 'success')" effect="dark">
+            {{ inv.action_type === 3 ? '外借中' : (inv.action_type === 2 ? '已消耗' : '已归还') }}
+          </el-tag>
+        </div>
+        <div class="task-body" style="padding-top: 10px;">
+          <p style="margin-bottom: 6px;"><strong>操作数量：</strong><span style="font-weight: bold; color: #f56c6c; font-family: monospace; font-size: 16px; margin: 0 4px;">{{ inv.quantity }}</span>{{ inv.unit }}</p>
+          <p style="margin-bottom: 6px; color: #909399; font-size: 12px;">办理时间：{{ inv.created_at }}</p>
+          <p v-if="inv.action_type === 3 && inv.expected_return_date" style="margin-bottom: 6px;">
+            <strong style="color: #e6a23c;">规定应还日期：</strong><span style="color: #e6a23c; font-weight: bold;">{{ inv.expected_return_date }}</span>
+          </p>
+          <div v-if="inv.remark" style="background-color: #f8f9fa; padding: 8px; border-radius: 4px; font-size: 12px; color: #606266; margin-top: 8px;">
+            备注：{{ inv.remark }}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-show="activeTab === 'profile'" class="h5-content profile-wrapper">
       <div class="profile-header">
         <div class="avatar"><el-icon><UserFilled /></el-icon></div>
@@ -106,10 +162,30 @@
       <div :class="['tab-item', { active: activeTab === 'orders' }]" @click="activeTab = 'orders'">
         <el-icon><List /></el-icon><span>工单大厅</span>
       </div>
+      <div :class="['tab-item', { active: activeTab === 'inventory' }]" @click="activeTab = 'inventory'">
+        <el-icon><Box /></el-icon><span>物资库</span>
+      </div>
       <div :class="['tab-item', { active: activeTab === 'profile' }]" @click="activeTab = 'profile'">
         <el-icon><User /></el-icon><span>个人中心</span>
       </div>
     </div>
+
+    <el-drawer v-model="msgDrawerVisible" title="消息与预警中心" direction="btt" size="85%" :with-header="false" style="border-top-left-radius: 16px; border-top-right-radius: 16px;">
+      <div class="drawer-header">
+        <span style="font-size: 16px; font-weight: bold; color: #303133;">实时消息列表</span>
+        <el-icon size="20" @click="msgDrawerVisible = false"><Close /></el-icon>
+      </div>
+      <div class="msg-list" v-loading="msgLoading">
+        <el-empty v-if="msgList.length === 0" description="暂无服务通知" :image-size="60" />
+        <div v-for="msg in msgList" :key="msg.id" :class="['msg-card', { unread: Number(msg.is_read) === 0 }]" @click="readMsg(msg)">
+          <div class="msg-header">
+            <span class="msg-title"><span v-if="Number(msg.is_read) === 0" class="red-dot"></span>{{ msg.title }}</span>
+            <span class="msg-time">{{ msg.created_at }}</span>
+          </div>
+          <div class="msg-content">{{ msg.content }}</div>
+        </div>
+      </div>
+    </el-drawer>
 
     <el-dialog 
       v-model="pwdDialogVisible" 
@@ -146,14 +222,20 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Iphone, List, Aim, Brush, Setting, FullScreen, Refresh, UserFilled, Lock, SwitchButton, ArrowRight, User } from '@element-plus/icons-vue'
+import { Iphone, List, Aim, Brush, Setting, FullScreen, Refresh, UserFilled, Lock, SwitchButton, ArrowRight, User, Box, BellFilled, Close, Timer } from '@element-plus/icons-vue'
 import request from '../../../utils/request'
 
 const router = useRouter()
 const userInfo = ref({})
 const rawOrders = ref([])
+const inventoryList = ref([])
 const activeTab = ref('orders')
 const actionLoading = ref(false)
+
+const msgDrawerVisible = ref(false)
+const msgLoading = ref(false)
+const msgList = ref([])
+const unreadCount = computed(() => msgList.value.filter(m => Number(m.is_read) === 0).length)
 
 const pwdDialogVisible = ref(false)
 const isForcedReset = ref(false)
@@ -172,6 +254,10 @@ const pendingOrders = computed(() => {
 const completedOrders = computed(() => {
   if (!userInfo.value.id) return []
   return rawOrders.value.filter(o => o.status > 2 && o.handler_id === userInfo.value.id)
+})
+
+const pendingReturns = computed(() => {
+  return inventoryList.value.filter(inv => inv.action_type === 3)
 })
 
 const actionMeta = computed(() => {
@@ -193,9 +279,33 @@ const fetchWorkOrders = async () => {
   try {
     const res = await request.get('/api/services/work-orders/list')
     if (res.code === 200) rawOrders.value = res.data
-  } catch (e) {
-    void e
-  }
+  } catch (e) {}
+}
+
+const fetchInventory = async () => {
+  try {
+    const res = await request.get('/api/worker/inventory')
+    if (res.code === 200) inventoryList.value = res.data
+  } catch (e) {}
+}
+
+const fetchMessages = async () => {
+  if (!userInfo.value.id) return
+  try {
+    const res = await request.get('/api/worker/notifications')
+    if (res.code === 200) msgList.value = res.data || []
+  } catch (e) {}
+}
+
+const openMsgDrawer = () => {
+  msgDrawerVisible.value = true
+  fetchMessages()
+}
+
+const readMsg = async (msg) => {
+  if (Number(msg.is_read) === 1) return
+  msg.is_read = 1
+  try { await request.post('/api/worker/notifications/read', { id: msg.id }) } catch (e) { msg.is_read = 0 }
 }
 
 const completeOrder = async (orderId) => {
@@ -262,14 +372,16 @@ onMounted(() => {
       if (parsed && parsed.id) {
         userInfo.value = parsed
         fetchWorkOrders()
+        fetchInventory()
+        fetchMessages()
         if (userInfo.value.need_reset_pwd) {
           openPwdDialog(true)
         }
+        setInterval(fetchMessages, 20000)
       } else {
         router.push('/h5/login')
       }
     } catch (e) {
-      void e
       localStorage.removeItem('h5_worker_token')
       localStorage.removeItem('h5_worker_user')
       router.push('/h5/login')
@@ -282,10 +394,13 @@ onMounted(() => {
 
 <style scoped>
 .mobile-container { width: 100%; max-width: 480px; margin: 0 auto; min-height: 100vh; background-color: #f5f7fa; padding-bottom: 70px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; position: relative;}
-.mobile-header { background: linear-gradient(135deg, #2c3e50, #3498db); color: #fff; padding: 30px 20px 40px 20px; display: flex; justify-content: space-between; align-items: flex-start; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; }
+.mobile-header { background: linear-gradient(135deg, #2c3e50, #3498db); color: #fff; padding: 25px 20px 40px 20px; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; }
+.user-greeting { flex: 1; min-width: 0; }
+.header-actions { flex-shrink: 0; margin-left: 15px; padding-top: 5px; }
+.msg-bell { cursor: pointer; padding: 5px; }
 .user-greeting h3 { margin: 0 0 8px 0; font-size: 22px; font-weight: bold; }
 .user-greeting p { margin: 0; font-size: 13px; opacity: 0.9; display: flex; align-items: center; gap: 4px; }
-.responsibility-card { margin: -25px 15px 15px 15px; background: #fff; border-radius: 10px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); position: relative; z-index: 10; }
+.responsibility-card { margin: 0 15px 15px 15px; background: #fff; border-radius: 10px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); position: relative; z-index: 10; }
 .resp-title { font-size: 14px; font-weight: bold; color: #409eff; margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
 .resp-content { font-size: 13px; color: #606266; line-height: 1.6; }
 .stats-panel { display: flex; margin: 0 15px 20px 15px; background: #fff; border-radius: 10px; padding: 15px 0; box-shadow: 0 2px 12px rgba(0,0,0,0.03); }
@@ -319,11 +434,18 @@ onMounted(() => {
 .menu-item:last-child { border-bottom: none; }
 .menu-item .el-icon { margin-right: 10px; font-size: 18px; color: #909399; }
 .menu-item .arrow { margin-left: auto; color: #c0c4cc; margin-right: 0; }
-.text-danger { color: #f56c6c !important; font-weight: bold; }
-.text-danger .el-icon { color: #f56c6c !important; }
 .force-tips { font-size: 13px; color: #f56c6c; background-color: #fef0f0; padding: 12px; border-radius: 6px; margin-bottom: 20px; line-height: 1.6; border: 1px solid #fde2e2; }
 .bottom-tabbar { position: fixed; bottom: 0; left: 0; right: 0; max-width: 480px; margin: 0 auto; height: 55px; background: #fff; display: flex; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 100; border-top: 1px solid #ebeef5; }
 .tab-item { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #909399; font-size: 11px; cursor: pointer; }
 .tab-item .el-icon { font-size: 22px; margin-bottom: 3px; }
 .tab-item.active { color: #409eff; }
+.drawer-header { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f2f5; }
+.msg-list { padding: 15px; height: calc(100% - 55px); overflow-y: auto; background-color: #f5f7fa; }
+.msg-card { background: #fff; border-radius: 8px; padding: 15px; margin-bottom: 12px; cursor: pointer; border: 1px solid #ebeef5; }
+.msg-card.unread { border-left: 3px solid #f56c6c; box-shadow: 0 2px 8px rgba(245, 108, 108, 0.1); }
+.msg-header { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: center;}
+.msg-title { font-size: 14px; font-weight: bold; color: #303133; position: relative; }
+.red-dot { display: inline-block; width: 6px; height: 6px; background-color: #f56c6c; border-radius: 50%; vertical-align: middle; margin-right: 4px; }
+.msg-time { font-size: 11px; color: #909399; }
+.msg-content { font-size: 13px; color: #606266; line-height: 1.5; }
 </style>

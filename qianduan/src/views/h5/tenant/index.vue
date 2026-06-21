@@ -20,6 +20,24 @@
     </div>
 
     <div v-show="activeTab === 'home'" class="h5-content floating-content" v-loading="overviewLoading">
+      
+      <div v-if="pendingReturns.length > 0" class="responsibility-card" style="border: 1px solid #faecd8; background-color: #fdf6ec; margin-bottom: 15px;">
+        <div class="resp-title" style="color: #e6a23c; margin-bottom: 12px;">
+          <el-icon><Box /></el-icon> 待归还物资提醒 ({{ pendingReturns.length }} 件)
+        </div>
+        <div v-for="inv in pendingReturns" :key="'ret-'+inv.id" class="quick-bill-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed #faecd8;">
+          <div class="qb-info">
+            <div class="qb-title" style="margin-bottom: 4px;">
+              <span class="qb-amount" style="color: #e6a23c; font-weight: bold; font-size: 15px;">{{ inv.item_name }}</span>
+              <span style="font-size: 14px; margin-left: 10px; font-weight: bold; color: #f56c6c;">x{{ inv.quantity }}{{ inv.unit }}</span>
+            </div>
+            <div class="qb-date text-danger" v-if="inv.expected_return_date" style="font-size: 12px; color: #f56c6c;">
+              <el-icon><Timer /></el-icon> 应于 {{ inv.expected_return_date }} 前归还
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="overview.contracts && overview.contracts.length > 0">
         <div class="stats-panel" style="margin-top: 0;">
           <div class="stat-box">
@@ -141,6 +159,36 @@
       </div>
     </div>
 
+    <div v-show="activeTab === 'inventory'" class="h5-content floating-content">
+      <div class="responsibility-card title-card">
+        <span class="resp-title" style="margin:0;"><el-icon><Box /></el-icon> 企业物资领用/借阅台账</span>
+        <el-tag size="small" type="primary" effect="light">{{ inventoryList.length }} 笔记录</el-tag>
+      </div>
+
+      <el-empty v-if="inventoryList.length === 0" description="暂无园区后勤物资领用或外借记录" :image-size="80" class="responsibility-card" />
+      
+      <div v-for="inv in inventoryList" :key="inv.id" class="bill-card" style="padding: 15px;">
+        <div class="bill-header" style="margin-bottom: 8px; padding-bottom: 8px;">
+          <span class="amount" style="font-size: 16px;">{{ inv.item_name }}</span>
+          <el-tag size="small" :type="inv.action_type === 3 ? 'warning' : (inv.action_type === 2 ? 'danger' : 'success')" effect="dark">
+            {{ inv.action_type === 3 ? '外借中' : (inv.action_type === 2 ? '已消耗' : '已归还') }}
+          </el-tag>
+        </div>
+        <div class="bill-body" style="margin-bottom: 0;">
+          <div class="b-line" style="margin-bottom: 6px;">
+            <strong>流转数量：</strong><span style="font-weight: bold; color: #f56c6c; font-family: monospace; font-size: 15px; margin: 0 4px;">{{ inv.quantity }}</span>{{ inv.unit }}
+          </div>
+          <div class="b-line" style="margin-bottom: 6px; color: #909399; font-size: 12px;">办理时间：{{ inv.created_at }}</div>
+          <div v-if="inv.action_type === 3 && inv.expected_return_date" class="b-line text-danger" style="margin-bottom: 6px;">
+            <strong style="color: #e6a23c;">协议应还日期：</strong><span style="color: #e6a23c;">{{ inv.expected_return_date }}</span>
+          </div>
+          <div v-if="inv.remark" class="b-line" style="background-color: #f8f9fa; padding: 8px; border-radius: 4px; font-size: 12px; color: #606266; margin-top: 8px;">
+            登记备注：{{ inv.remark }}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-show="activeTab === 'profile'" class="h5-content profile-wrapper">
       <div class="profile-header">
         <div class="avatar"><el-icon><OfficeBuilding /></el-icon></div>
@@ -159,6 +207,7 @@
       <div :class="['tab-item', { active: activeTab === 'home' }]" @click="activeTab = 'home'"><el-icon><House /></el-icon><span>资产</span></div>
       <div :class="['tab-item', { active: activeTab === 'bills' }]" @click="activeTab = 'bills'"><el-icon><Wallet /></el-icon><span>账单</span></div>
       <div :class="['tab-item', { active: activeTab === 'repair' }]" @click="activeTab = 'repair'"><el-icon><Tools /></el-icon><span>报修</span></div>
+      <div :class="['tab-item', { active: activeTab === 'inventory' }]" @click="activeTab = 'inventory'"><el-icon><Box /></el-icon><span>物资</span></div>
       <div :class="['tab-item', { active: activeTab === 'profile' }]" @click="activeTab = 'profile'"><el-icon><User /></el-icon><span>我的</span></div>
     </div>
 
@@ -216,7 +265,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { House, Wallet, Tools, User, Timer, Camera, Plus, OfficeBuilding, Lock, SwitchButton, ArrowRight, Bell, WarningFilled, Warning, CircleCloseFilled, BellFilled, Close } from '@element-plus/icons-vue'
+import { House, Wallet, Tools, User, Timer, Camera, Plus, OfficeBuilding, Lock, SwitchButton, ArrowRight, Bell, WarningFilled, Warning, CircleCloseFilled, BellFilled, Close, Box } from '@element-plus/icons-vue'
 import request from '../../../utils/request'
 
 const router = useRouter()
@@ -224,12 +273,12 @@ const activeTab = ref('home')
 const enterpriseId = ref(0)
 const enterpriseName = ref('')
 
-const overview = ref({ contracts: [] }) // 核心：支持多合同数组接收
+const overview = ref({ contracts: [] }) 
 const overviewLoading = ref(false)
 const bills = ref([])
 const billsLoading = ref(false)
+const inventoryList = ref([])
 
-// 资产聚合计算
 const totalMonthlyRent = computed(() => {
   if (!overview.value.contracts || overview.value.contracts.length === 0) return 0
   return overview.value.contracts.reduce((sum, contract) => sum + Number(contract.monthly_rent || 0), 0).toFixed(2)
@@ -241,6 +290,10 @@ const totalDeposit = computed(() => {
 })
 
 const unpaidBills = computed(() => bills.value.filter(bill => Number(bill.is_paid) === 0 || Number(bill.is_paid) === 3))
+
+const pendingReturns = computed(() => {
+  return inventoryList.value.filter(inv => inv.action_type === 3)
+})
 
 const msgDrawerVisible = ref(false)
 const msgLoading = ref(false)
@@ -262,6 +315,8 @@ const initSocket = () => {
       const data = JSON.parse(event.data)
       if (data.type === 'notification' || data.type === 'reject') {
         fetchMessages() 
+        if (data.type === 'notification' && data.msg && data.msg.includes('物资')) fetchInventory()
+
         if (data.type === 'reject') {
           ElMessage.warning(data.msg || '有一笔账单凭证被驳回')
           fetchBills() 
@@ -324,6 +379,14 @@ const initUserInfo = () => {
   enterpriseName.value = info.enterprise_name || info.name || info.tenant_name || ''
 }
 
+const fetchInventory = async () => {
+  if (!enterpriseId.value) return
+  try {
+    const res = await request.get('/api/tenant/inventory')
+    if (res.code === 200) inventoryList.value = res.data
+  } catch (e) {}
+}
+
 const fetchOverview = async () => {
   overviewLoading.value = true
   try {
@@ -335,6 +398,8 @@ const fetchOverview = async () => {
         enterpriseId.value = res.data.enterprise.id
         fetchMessages() 
         initSocket()
+        fetchInventory()
+        
         const infoStr = localStorage.getItem('tenant_info')
         if (infoStr) {
           try {

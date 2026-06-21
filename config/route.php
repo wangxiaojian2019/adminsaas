@@ -61,7 +61,6 @@ Route::group('/api', function () {
     Route::get('/contracts/docs', [app\controller\ContractController::class, 'docs']);
     Route::post('/contracts/generate_elec', [app\controller\ContractController::class, 'generateElec']);
     Route::post('/contracts/alter', [app\controller\ContractController::class, 'alterContract']);
-    // 核心路由：获取资产合同族谱履历
     Route::get('/contracts/history', [app\controller\ContractController::class, 'history']);
     
     Route::get('/finance/receivables/list', [app\controller\FinanceController::class, 'receivableList']);
@@ -80,12 +79,18 @@ Route::group('/api', function () {
     Route::post('/tenant/pay', [app\controller\TenantPortalController::class, 'payBill']);
     Route::post('/tenant/order/submit', [app\controller\TenantPortalController::class, 'submitOrder']); 
     Route::post('/tenant/password/update', [app\controller\TenantPortalController::class, 'updatePassword']); 
+    Route::get('/tenant/inventory', [app\controller\TenantPortalController::class, 'getInventory']);
 
     Route::get('/worker/tasks', [app\controller\WorkerPortalController::class, 'getTasks']);
     Route::post('/worker/tasks/complete', [app\controller\WorkerPortalController::class, 'completeTask']);
     Route::get('/worker/patrol/points', [app\controller\WorkerPortalController::class, 'getPatrolPoints']);
     Route::post('/worker/patrol/submit', [app\controller\WorkerPortalController::class, 'submitPatrol']);
     Route::post('/worker/password/update', [app\controller\WorkerPortalController::class, 'updatePassword']); 
+    Route::get('/worker/inventory', [app\controller\WorkerPortalController::class, 'getInventory']);
+    
+    // 核心新增：员工通知系统
+    Route::get('/worker/notifications', [app\controller\WorkerPortalController::class, 'getNotifications']);
+    Route::post('/worker/notifications/read', [app\controller\WorkerPortalController::class, 'readNotification']);
     
     Route::get('/patrol/points/list', [app\controller\PatrolController::class, 'pointList']);
     Route::post('/patrol/points/add', [app\controller\PatrolController::class, 'pointAdd']);
@@ -105,6 +110,11 @@ Route::group('/api', function () {
 
     Route::get('/notification/list', [app\controller\NotificationController::class, 'list']);
     Route::post('/notification/read', [app\controller\NotificationController::class, 'read']);
+
+    Route::get('/inventory/list', [app\controller\InventoryController::class, 'list']);
+    Route::post('/inventory/add', [app\controller\InventoryController::class, 'add']);
+    Route::post('/inventory/action', [app\controller\InventoryController::class, 'action']);
+    Route::get('/inventory/records', [app\controller\InventoryController::class, 'records']);
 
 })->middleware([
     app\middleware\AuthMiddleware::class
