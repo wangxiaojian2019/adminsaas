@@ -82,7 +82,7 @@
         <div v-for="order in pendingOrders" :key="order.id" class="task-card">
           <div class="task-header">
             <span class="task-title">{{ order.title }}</span>
-            <el-tag size="small" type="danger" effect="dark">调度加急</el-tag>
+            <el-tag size="small" type="danger" effect="dark" v-if="order.priority === 1">调度加急</el-tag>
           </div>
           
           <div class="task-body">
@@ -246,12 +246,10 @@ const pwdRules = {
   new_password: [{ required: true, message: '新密码必填', trigger: 'blur' }, { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }]
 }
 
-// 提取当前用户的角色身份
 const displayRoleType = computed(() => {
   return userInfo.value.role_type || userInfo.value.position || '综合外勤'
 })
 
-// 判定是否是保安/巡逻人员
 const isSecurity = computed(() => {
   const role = displayRoleType.value
   return role.includes('安保') || role.includes('巡逻') || role.includes('保安')
@@ -259,18 +257,17 @@ const isSecurity = computed(() => {
 
 const pendingOrders = computed(() => {
   if (!userInfo.value.id) return []
-  return rawOrders.value.filter(o => o.status === 2 && o.handler_id === userInfo.value.id)
+  return rawOrders.value.filter(o => o.status === 2 && Number(o.handler_id) === Number(userInfo.value.id))
 })
 const completedOrders = computed(() => {
   if (!userInfo.value.id) return []
-  return rawOrders.value.filter(o => o.status > 2 && o.handler_id === userInfo.value.id)
+  return rawOrders.value.filter(o => o.status >= 3 && Number(o.handler_id) === Number(userInfo.value.id))
 })
 
 const pendingReturns = computed(() => {
   return inventoryList.value.filter(inv => inv.action_type === 3)
 })
 
-// 根据工种动态变换主页大按钮
 const actionMeta = computed(() => {
   const role = displayRoleType.value
   if (role.includes('安保') || role.includes('巡逻')) return { btnText: '防区安全巡检打卡', iconName: 'Aim', color: '#f56c6c' }
@@ -288,13 +285,13 @@ const parseDesc = (desc) => {
 
 const fetchWorkOrders = async () => {
   try {
-    const res = await request.get('/api/services/work-orders/list')
+    const res = await request.get('/api/work_order/list')
     if (res.code === 200) rawOrders.value = res.data
   } catch (e) {}
 }
 
 const fetchInventory = async () => {
-  if (isSecurity.value) return // 重点：安保系统不拉取物资数据，节省请求
+  if (isSecurity.value) return 
   try {
     const res = await request.get('/api/worker/inventory')
     if (res.code === 200) inventoryList.value = res.data
@@ -323,7 +320,11 @@ const readMsg = async (msg) => {
 const completeOrder = async (orderId) => {
   actionLoading.value = true
   try {
-    const res = await request.post('/api/services/work-orders/verify', { id: orderId })
+    const res = await request.post('/api/work_order/action', { 
+        id: orderId, 
+        action: 'resolve',
+        result_remark: 'H5移动端打卡完工'
+    })
     if (res.code === 200) {
       ElMessage.success('打卡成功！现场数据已实时回传中控室。')
       fetchWorkOrders()
@@ -353,7 +354,7 @@ const submitPwd = () => {
     }
     submitLoading.value = true
     try {
-      const res = await request.post('/api/services/staff/update_pwd', pwdForm)
+      const res = await request.post('/api/worker/password/update', pwdForm)
       if (res.code === 200) {
         ElMessage.success('密码修改成功，请牢记')
         pwdDialogVisible.value = false

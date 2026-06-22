@@ -113,11 +113,12 @@ Route::group('/api', function () {
     Route::post('/patrol/checkin', [app\controller\PatrolController::class, 'checkin']);
     Route::get('/patrol/records', [app\controller\PatrolController::class, 'records']);
     
-    // 物业服务与后勤工单
-    Route::get('/services/work-orders/list', [app\controller\WorkOrderController::class, 'list']);
-    Route::post('/services/work-orders/assign', [app\controller\WorkOrderController::class, 'assign']);
-    Route::post('/services/work-orders/complete', [app\controller\WorkOrderController::class, 'complete']);
-    Route::post('/services/work-orders/verify', [app\controller\WorkOrderController::class, 'verify']);
+    // 外勤工单大盘核心引擎
+    Route::get('/work_order/list', [app\controller\WorkOrderController::class, 'list']);
+    Route::post('/work_order/add', [app\controller\WorkOrderController::class, 'add']);
+    Route::post('/work_order/action', [app\controller\WorkOrderController::class, 'action']);
+    
+    // 物业服务基层员工
     Route::get('/services/staff/list', [app\controller\ServiceStaffController::class, 'list']);
     Route::post('/services/staff/add', [app\controller\ServiceStaffController::class, 'add']);
     Route::post('/services/staff/update', [app\controller\ServiceStaffController::class, 'update']);

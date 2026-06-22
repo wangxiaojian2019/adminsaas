@@ -9,19 +9,35 @@ class WorkOrderController
     public function list(Request $request)
     {
         $list = Db::table('work_orders')
-            ->leftJoin('admins', 'work_orders.worker_id', '=', 'admins.id')
-            ->select('work_orders.*', 'admins.real_name as worker_name')
+            ->leftJoin('admins', 'work_orders.handler_id', '=', 'admins.id')
+            ->select('work_orders.*', 'admins.real_name as handler_name')
             ->orderBy('work_orders.priority', 'desc')
             ->orderBy('work_orders.id', 'desc')
             ->get();
 
         $now = time();
-        // SLA 引擎：动态计算超时违规标识
-        foreach ($list as &$item) {
+        
+        foreach ($list as $item) {
             $item->is_timeout = false;
-            // 规则：P0 紧急工单，创建后 15 分钟未接单即判定为 SLA 违规
-            if ($item->priority == 1 && in_array($item->status, [1, 2]) && !$item->accepted_at) {
-                if (($now - strtotime($item->created_at)) > 15 * 60) {
+            $item->response_time_seconds = 0; 
+            $item->resolve_time_seconds = 0;  
+
+            // 提取创建时间，若数据异常则回退到当前时间避免 strtotime 返回 false
+            $createdAtTime = $item->created_at ? (int)strtotime($item->created_at) : $now;
+
+            if ($item->accepted_at) {
+                $item->response_time_seconds = (int)strtotime($item->accepted_at) - $createdAtTime;
+            }
+
+            if ($item->resolved_at && $item->accepted_at) {
+                $item->resolve_time_seconds = (int)strtotime($item->resolved_at) - (int)strtotime($item->accepted_at);
+            }
+
+            // SLA 引擎：动态计算超时违规标识
+            if ($item->priority == 1) {
+                if (!$item->accepted_at && ($now - $createdAtTime) > 15 * 60) {
+                    $item->is_timeout = true;
+                } elseif ($item->accepted_at && $item->response_time_seconds > 15 * 60) {
                     $item->is_timeout = true;
                 }
             }
@@ -33,7 +49,9 @@ class WorkOrderController
     public function add(Request $request)
     {
         $title = $request->post('title');
-        $content = $request->post('content');
+        $content = $request->post('content', '');
+        $description = $request->post('description', '');
+        $reporter_name = $request->post('reporter_name', '系统内部指派'); 
         $priority = intval($request->post('priority', 0));
 
         if (!$title) {
@@ -43,11 +61,14 @@ class WorkOrderController
         Db::table('work_orders')->insert([
             'title' => $title,
             'content' => $content,
+            'description' => $description,
+            'reporter_name' => $reporter_name,
             'priority' => $priority,
             'status' => 1, 
-            'worker_id' => 0,
+            'handler_id' => 0,
             'created_at' => date('Y-m-d H:i:s')
         ]);
+        
         return json(['code' => 200, 'msg' => '工单下发成功，已进入派单池']);
     }
 
@@ -55,7 +76,12 @@ class WorkOrderController
     {
         $id = $request->post('id');
         $action = $request->post('action'); 
-        $admin = $request->user;
+        
+        $targetHandlerId = intval($request->post('handler_id', 0));
+        if ($targetHandlerId === 0) {
+            $admin = $request->user;
+            $targetHandlerId = $admin ? (is_array($admin) ? ($admin['id'] ?? 0) : ($admin->id ?? 0)) : 0;
+        }
 
         $order = Db::table('work_orders')->where('id', $id)->first();
         if (!$order) {
@@ -63,46 +89,74 @@ class WorkOrderController
         }
 
         $updateData = [];
-        $now = date('Y-m-d H:i:s');
+        // 分离字符串时间（入库用）与整型时间戳（计算用）
+        $nowStr = date('Y-m-d H:i:s');
+        $nowTime = time();
+        $isNewAssign = false;
 
-        // 状态机与 SLA 时间戳记录
         if ($action === 'accept') {
-            $updateData['accepted_at'] = $now;
-            $updateData['status'] = 3; 
-            // 若为主动抢单，则绑定当前操作人
-            $updateData['worker_id'] = $order->worker_id ?: ($admin->id ?? 0);
+            if ($order->status != 1) {
+                return json(['code' => 400, 'msg' => '当前状态不符合接单或派单条件']);
+            }
+            $updateData['accepted_at'] = $nowStr;
+            $updateData['status'] = 2; 
+            $updateData['handler_id'] = $targetHandlerId; 
+            $isNewAssign = true;
+            
         } elseif ($action === 'arrive') {
-            $updateData['arrived_at'] = $now;
+            if ($order->status != 2) {
+                return json(['code' => 400, 'msg' => '未接单或已结单，无法进行到场打卡']);
+            }
+            $updateData['arrived_at'] = $nowStr;
+            
         } elseif ($action === 'resolve') {
-            $updateData['resolved_at'] = $now;
+            if ($order->status != 2) {
+                return json(['code' => 400, 'msg' => '前置状态异常，不满足结单条件']);
+            }
+            $updateData['resolved_at'] = $nowStr;
             $updateData['status'] = 4; 
-            $updateData['result_remark'] = $request->post('result_remark', '');
+            
+            $resultRemark = $request->post('result_remark');
+            if ($resultRemark) {
+                $updateData['description'] = $order->description . "\n[结单备注]: " . $resultRemark;
+            }
         } else {
-            return json(['code' => 400, 'msg' => '非法状态流转']);
+            return json(['code' => 400, 'msg' => '非法状态流转参数']);
         }
 
         Db::beginTransaction();
         try {
             Db::table('work_orders')->where('id', $id)->update($updateData);
 
-            // SLA 告警：如果是 P0 工单且发生接单超时，记录系统级审计日志
+            if ($isNewAssign && $targetHandlerId > 0) {
+                Db::table('worker_notifications')->insert([
+                    'worker_id' => $targetHandlerId,
+                    'title' => '调度中心新任务派发',
+                    'content' => "任务大厅有新下发的工单 [{$order->title}] 已指定由您负责，请前往现场处置并在 H5 完工打卡。",
+                    'is_read' => 0,
+                    'created_at' => $nowStr
+                ]);
+            }
+
+            // 使用安全转换的整型时间进行数学相减，规避 A non-numeric value encountered
+            $createdAtTime = $order->created_at ? (int)strtotime($order->created_at) : $nowTime;
             if ($action === 'accept' && $order->priority == 1) {
-                if (($now - strtotime($order->created_at)) > 15 * 60) {
+                if (($nowTime - $createdAtTime) > 15 * 60) {
                     Db::table('notifications')->insert([
-                        'enterprise_id' => 0,
+                        'enterprise_id' => 0, 
                         'title' => '【SLA违规告警】紧急工单响应超时',
-                        'content' => "工单 [{$order->title}] 已超出 15 分钟响应时效，当前已由相关人员接单，请后勤主管介入复盘效能。",
+                        'content' => "工单 [{$order->title}] 已超出 15 分钟响应时效，目前已由外勤人员接单，请后勤主管介入复盘效能。",
                         'is_read' => 0,
-                        'created_at' => $now
+                        'created_at' => $nowStr
                     ]);
                 }
             }
 
             Db::commit();
-            return json(['code' => 200, 'msg' => 'SLA 节点打卡成功']);
+            return json(['code' => 200, 'msg' => '任务状态流转及通知派发成功']);
         } catch (\Exception $e) {
             Db::rollBack();
-            return json(['code' => 500, 'msg' => '工单引擎处理失败']);
+            return json(['code' => 500, 'msg' => '工单引擎处理失败: ' . $e->getMessage()]);
         }
     }
 }

@@ -23,6 +23,7 @@ const routes = [
       { path: 'finance', name: 'Finance', component: () => import('../views/finance/index.vue'), meta: { title: '业财一体化中心' } },
       { path: 'patrol', name: 'Patrol', component: () => import('../views/patrol/index.vue'), meta: { title: '智能安防巡检' } },
       { path: 'services', name: 'Services', component: () => import('../views/services/index.vue'), meta: { title: '基层服务人员管理' } },
+      { path: 'workOrder', name: 'WorkOrder', component: () => import('../views/workOrder/index.vue'), meta: { title: '外勤工单大盘' } },
       { path: 'reports', name: 'Reports', component: () => import('../views/reports/index.vue'), meta: { title: '报表与 BI 中心' } },
       { path: 'inventory', name: 'Inventory', component: () => import('../views/inventory/index.vue'), meta: { title: '仓库与物料' } }
     ]
@@ -31,7 +32,6 @@ const routes = [
 
 const router = createRouter({ history: createWebHistory(), routes })
 
-// 核心重构：弃用 next，采用 Vue 官方推荐的 return 中断法
 router.beforeEach((to, from) => {
   document.title = to.meta.title ? `${to.meta.title} - 智慧园区SaaS` : '智慧园区SaaS'
   const path = to.path
