@@ -287,6 +287,7 @@ CREATE TABLE `inventory_items` (
   `name` varchar(100) NOT NULL COMMENT '物品名称',
   `category` tinyint(1) DEFAULT '1' COMMENT '1-易耗品(灯管/滤网) 2-固定资产(电钻/人字梯)',
   `stock` int(11) DEFAULT '0' COMMENT '当前库存量',
+  `safety_stock` int(11) DEFAULT '0' COMMENT '安全库存下限预警值',
   `unit` varchar(20) DEFAULT '个' COMMENT '计量单位',
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL,
@@ -300,7 +301,7 @@ CREATE TABLE `inventory_items` (
 
 LOCK TABLES `inventory_items` WRITE;
 /*!40000 ALTER TABLE `inventory_items` DISABLE KEYS */;
-INSERT INTO `inventory_items` VALUES (1,'扶梯',2,8,'个','2026-06-21 11:21:32','2026-06-21 15:18:08'),(2,'拖把',1,7,'个','2026-06-21 11:26:00','2026-06-21 15:26:28');
+INSERT INTO `inventory_items` VALUES (1,'扶梯',2,8,3,'个','2026-06-21 11:21:32','2026-06-21 15:18:08'),(2,'拖把',1,7,5,'个','2026-06-21 11:26:00','2026-06-21 15:26:28');
 /*!40000 ALTER TABLE `inventory_items` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -382,6 +383,8 @@ CREATE TABLE `leads` (
   `industry` varchar(50) DEFAULT NULL COMMENT '所属行业',
   `tax_no` varchar(50) DEFAULT NULL COMMENT '统一社会信用代码',
   `owner_id` int(11) DEFAULT '0' COMMENT '归属业务员ID，0代表处于公共池',
+  `last_owner_id` int(11) DEFAULT '0' COMMENT '上一任负责人ID(用于防囤积冷却)',
+  `drop_time` datetime DEFAULT NULL COMMENT '掉入公海的时间戳',
   `audit_status` tinyint(1) DEFAULT '1' COMMENT '审核状态 0:待审核 1:已通过 2:已驳回',
   `last_follow_time` datetime DEFAULT NULL COMMENT '最后跟进或审核通过时间，用于15天倒计时计算',
   `admin_id` int(11) NOT NULL DEFAULT '0' COMMENT '负责人ID',
@@ -396,7 +399,7 @@ CREATE TABLE `leads` (
 
 LOCK TABLES `leads` WRITE;
 /*!40000 ALTER TABLE `leads` DISABLE KEYS */;
-INSERT INTO `leads` VALUES (1,'大疆创新设备','采购部','15911112221',500.00,'线上获客',1,'2026-05-12 14:20:00','智能制造','91440300MA5EXXX001',0,1,NULL,0,NULL),(2,'元气森林研发','行政部','15911112222',300.00,'渠道中介',2,'2026-05-15 10:00:00','快消品','91440300MA5EXXX002',0,1,NULL,0,NULL),(101,'星动科技有限公司','马总','13800001111',500.00,'1',1,'2026-06-09 21:49:39',NULL,NULL,0,1,NULL,2,'2026-06-13 21:49:39'),(102,'云端创想文化传媒','林总监','13900002222',150.00,'2',1,'2026-05-25 21:49:39',NULL,NULL,0,1,NULL,2,'2026-06-01 21:49:39'),(103,'雷霆跨境电商贸易','陈经理','13700003333',300.00,'3',1,'2026-05-15 21:49:39',NULL,NULL,0,1,NULL,2,'2026-05-27 21:49:39'),(104,'极客时代软件研发','张工','13600004444',1000.00,'4',1,'2026-06-13 21:49:39',NULL,NULL,0,1,'2026-06-22 15:57:11',104,'2026-06-15 21:10:14'),(105,'绿洲生态农业发展','刘董','13500005555',800.00,'1',1,'2026-06-04 21:49:39',NULL,NULL,0,1,NULL,3,'2026-06-12 21:49:39');
+INSERT INTO `leads` VALUES (1,'大疆创新设备','采购部','15911112221',500.00,'线上获客',1,'2026-05-12 14:20:00','智能制造','91440300MA5EXXX001',0,0,NULL,1,NULL,0,NULL),(2,'元气森林研发','行政部','15911112222',300.00,'渠道中介',2,'2026-05-15 10:00:00','快消品','91440300MA5EXXX002',0,0,NULL,1,NULL,0,NULL),(101,'星动科技有限公司','马总','13800001111',500.00,'1',1,'2026-06-09 21:49:39',NULL,NULL,0,0,NULL,1,NULL,2,'2026-06-13 21:49:39'),(102,'云端创想文化传媒','林总监','13900002222',150.00,'2',1,'2026-05-25 21:49:39',NULL,NULL,0,0,NULL,1,NULL,2,'2026-06-01 21:49:39'),(103,'雷霆跨境电商贸易','陈经理','13700003333',300.00,'3',1,'2026-05-15 21:49:39',NULL,NULL,0,0,NULL,1,NULL,2,'2026-05-27 21:49:39'),(104,'极客时代软件研发','张工','13600004444',1000.00,'4',1,'2026-06-13 21:49:39',NULL,NULL,0,0,NULL,1,'2026-06-22 15:57:11',104,'2026-06-15 21:10:14'),(105,'绿洲生态农业发展','刘董','13500005555',800.00,'1',1,'2026-06-04 21:49:39',NULL,NULL,0,0,NULL,1,NULL,3,'2026-06-12 21:49:39');
 /*!40000 ALTER TABLE `leads` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -562,7 +565,7 @@ CREATE TABLE `permissions` (
   `icon` varchar(50) DEFAULT NULL COMMENT '前端图标组件名',
   `sort` int(11) DEFAULT '0' COMMENT '排序权重',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -571,7 +574,7 @@ CREATE TABLE `permissions` (
 
 LOCK TABLES `permissions` WRITE;
 /*!40000 ALTER TABLE `permissions` DISABLE KEYS */;
-INSERT INTO `permissions` VALUES (1,0,'运营数据指挥舱',1,'/dashboard','Odometer',10),(2,0,'大厦与资产大盘',1,'/buildings','OfficeBuilding',20),(3,0,'房源资产精细库',1,'/spaces','School',30),(4,0,'车位月卡与收费',1,'/vehicles','Van',40),(5,0,'招商与线索中心',1,'/leads','User',50),(6,0,'企业户籍档案',1,'/enterprises','Memo',60),(7,0,'租务与合同中心',1,'/contracts','Document',70),(8,0,'业财一体化中心',1,'/finance','Money',80),(9,0,'智能安防巡检',1,'/patrol','Aim',90),(10,0,'基层服务人员管理',1,'/services','Service',100),(11,0,'报表与 BI 中心',1,'/reports','DataLine',110),(12,0,'系统与权限控制',1,'/system','Setting',999);
+INSERT INTO `permissions` VALUES (1,0,'运营数据指挥舱',1,'/dashboard','Odometer',10),(2,0,'大厦与资产大盘',1,'/buildings','OfficeBuilding',20),(3,0,'房源资产精细库',1,'/spaces','School',30),(4,0,'车位月卡与收费',1,'/vehicles','Van',40),(5,0,'招商与线索中心',1,'/leads','User',50),(6,0,'企业户籍档案',1,'/enterprises','Memo',60),(7,0,'租务与合同中心',1,'/contracts','Document',70),(8,0,'业财一体化中心',1,'/finance','Money',80),(9,0,'智能安防巡检',1,'/patrol','Aim',90),(10,0,'基层服务人员管理',1,'/services','Service',100),(11,0,'报表与 BI 中心',1,'/reports','DataLine',110),(12,0,'系统与权限控制',1,'/system','Setting',999),(13,0,'仓库与物料',1,'/inventory','Box',120),(14,0,'外勤工单大盘',1,'/workOrder','Document',130);
 /*!40000 ALTER TABLE `permissions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -629,7 +632,7 @@ CREATE TABLE `role_permissions` (
 
 LOCK TABLES `role_permissions` WRITE;
 /*!40000 ALTER TABLE `role_permissions` DISABLE KEYS */;
-INSERT INTO `role_permissions` VALUES (1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(1,8),(1,9),(1,10),(1,11),(1,12),(2,1),(2,2),(2,3),(2,5),(2,6),(3,1),(3,6),(3,7),(3,8),(3,11),(6,2),(6,5),(7,5);
+INSERT INTO `role_permissions` VALUES (1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(1,8),(1,9),(1,10),(1,11),(1,12),(1,13),(1,14),(2,1),(2,2),(2,3),(2,5),(2,6),(3,1),(3,6),(3,7),(3,8),(3,11),(6,2),(6,5),(7,5);
 /*!40000 ALTER TABLE `role_permissions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -656,7 +659,7 @@ CREATE TABLE `roles` (
 
 LOCK TABLES `roles` WRITE;
 /*!40000 ALTER TABLE `roles` DISABLE KEYS */;
-INSERT INTO `roles` VALUES (1,'超级管理员',3,'2026-06-10 15:20:37',NULL),(2,'招商主管',2,'2026-06-10 15:20:37',NULL),(3,'财务专员',3,'2026-06-10 15:20:37',NULL),(4,'工程维修',1,'2026-06-10 15:20:37',NULL),(5,'总经理',3,'2026-06-10 23:06:34',NULL),(6,'招商业务员',1,'2026-06-14 21:58:45','2,5'),(7,'招商主管',2,'2026-06-14 21:59:07',NULL);
+INSERT INTO `roles` VALUES (1,'超级管理员',3,'2026-06-10 15:20:37','1,2,3,4,5,6,7,8,9,10,11,12'),(2,'招商主管',2,'2026-06-10 15:20:37',NULL),(3,'财务专员',3,'2026-06-10 15:20:37',NULL),(4,'工程维修',1,'2026-06-10 15:20:37',NULL),(5,'总经理',3,'2026-06-10 23:06:34',NULL),(6,'招商业务员',1,'2026-06-14 21:58:45','2,5'),(7,'招商主管',2,'2026-06-14 21:59:07',NULL);
 /*!40000 ALTER TABLE `roles` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -706,7 +709,12 @@ CREATE TABLE `work_orders` (
   `reporter_name` varchar(50) NOT NULL,
   `handler_id` int(11) DEFAULT NULL COMMENT '处理人(维修工)ID',
   `status` tinyint(1) NOT NULL DEFAULT '1' COMMENT '1:待指派 2:处理中 3:待验收 4:已结单',
+  `priority` tinyint(1) DEFAULT '0' COMMENT '优先级：0-普通，1-紧急(P0)',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `accepted_at` datetime DEFAULT NULL COMMENT '接单时间戳',
+  `arrived_at` datetime DEFAULT NULL COMMENT '到场打卡时间戳',
+  `resolved_at` datetime DEFAULT NULL COMMENT '结单时间戳',
+  `content` text COMMENT '工单详情/现场说明',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -717,7 +725,7 @@ CREATE TABLE `work_orders` (
 
 LOCK TABLES `work_orders` WRITE;
 /*!40000 ALTER TABLE `work_orders` DISABLE KEYS */;
-INSERT INTO `work_orders` VALUES (1,'贝吉塔被打啦','\n\n【现场照片证物】: /uploads/cert_6a3137ef47cb8.jpg','拓普检测技术有限公司 (胡总)',NULL,1,'2026-06-16 19:48:12');
+INSERT INTO `work_orders` VALUES (1,'贝吉塔被打啦','\n\n【现场照片证物】: /uploads/cert_6a3137ef47cb8.jpg','拓普检测技术有限公司 (胡总)',NULL,1,0,'2026-06-16 19:48:12',NULL,NULL,NULL,NULL);
 /*!40000 ALTER TABLE `work_orders` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -766,4 +774,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-22 17:37:56
+-- Dump completed on 2026-06-22 23:29:52

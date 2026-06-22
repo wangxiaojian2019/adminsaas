@@ -12,15 +12,14 @@ class LeadController
         $adminId = $admin->id ?? 1;
         $roleId = $admin->role_id ?? 1;
 
-        // 【自动掉落引擎】：15天未跟进自动掉入公海 (admin_id 置为 0)
+        // 【自动掉落引擎 & 防囤积标记】：15天未跟进自动掉入公海，并打上前任负责人与掉落时间戳烙印
         $fifteenDaysAgo = date('Y-m-d H:i:s', strtotime('-15 days'));
-        Db::table('leads')
-            ->where('admin_id', '>', 0)
-            ->where('status', '<', 3) 
-            ->where('last_follow_time', '<', $fifteenDaysAgo)
-            ->update([
-                'admin_id' => 0
-            ]);
+        $nowStr = date('Y-m-d H:i:s');
+        
+        Db::update(
+            "UPDATE leads SET last_owner_id = admin_id, drop_time = ?, admin_id = 0 WHERE admin_id > 0 AND status < 3 AND last_follow_time < ?", 
+            [$nowStr, $fifteenDaysAgo]
+        );
 
         // 获取当前登录角色的数据权限范围
         $role = Db::table('roles')->where('id', $roleId)->first();
@@ -68,6 +67,7 @@ class LeadController
             'source' => $request->post('source', ''),
             'status' => 1, 
             'admin_id' => $admin->id ?? 0, 
+            'last_owner_id' => 0,
             'last_follow_time' => date('Y-m-d H:i:s'),
             'created_at' => date('Y-m-d H:i:s')
         ]);
@@ -90,6 +90,37 @@ class LeadController
 
         Db::beginTransaction();
         try {
+            $lead = Db::table('leads')->where('id', $leadId)->lockForUpdate()->first();
+            
+            $updateData = [
+                'status' => $status,
+                'last_follow_time' => $now
+            ];
+            
+            $isClaimed = false;
+            
+            // 【SOP 拦截核心】：如果当前处理的是公海线索
+            if ($lead->admin_id == 0) {
+                // 防囤积校验：如果是原负责人，且距离掉落不足7天，实施物理拦截
+                if ($lead->last_owner_id == $admin->id && $lead->drop_time) {
+                    $dropTimestamp = strtotime($lead->drop_time);
+                    $sevenDaysLater = $dropTimestamp + (7 * 24 * 3600);
+                    if (time() < $sevenDaysLater) {
+                        Db::rollBack();
+                        return json([
+                            'code' => 403, 
+                            'msg' => 'SOP防囤积拦截：由于您逾期未跟进导致线索掉落，已触发7天冷却惩罚。需至 '.date('Y-m-d H:i', $sevenDaysLater).' 方可重新捞取，当前仅允许其他同事介入。'
+                        ]);
+                    }
+                }
+
+                $updateData['admin_id'] = $admin->id;
+                // 新人接手或惩罚期满后认领，抹除原有的掉落印记
+                $updateData['last_owner_id'] = 0;
+                $updateData['drop_time'] = null;
+                $isClaimed = true;
+            }
+
             // 1. 写跟进记录
             Db::table('lead_follow_ups')->insert([
                 'lead_id' => $leadId,
@@ -97,31 +128,18 @@ class LeadController
                 'content' => $request->post('content'),
                 'created_at' => $now
             ]);
-            
-            // 2. 检查线索原来是否在公海
-            $lead = Db::table('leads')->where('id', $leadId)->lockForUpdate()->first();
-            $updateData = [
-                'status' => $status,
-                'last_follow_time' => $now
-            ];
-            
-            // 【核心逻辑】：如果原来在公海 (admin_id=0)，只要你写了跟进，这单就归你了！
-            $isClaimed = false;
-            if ($lead->admin_id == 0) {
-                $updateData['admin_id'] = $admin->id;
-                $isClaimed = true;
-            }
 
+            // 2. 更新线索主表
             Db::table('leads')->where('id', $leadId)->update($updateData);
 
             Db::commit();
             
-            $msg = $isClaimed ? '跟进录入成功！该公海线索已自动锁定到您的私海中。' : '跟进日志保存成功，保护期已重置。';
+            $msg = $isClaimed ? '捞取成功！该公海线索已自动锁定到您的私海。' : '跟进纪要保存成功，私海保护期已重置15天。';
             return json(['code' => 200, 'msg' => $msg]);
             
         } catch (\Exception $e) {
             Db::rollBack();
-            return json(['code' => 500, 'msg' => '保存失败']);
+            return json(['code' => 500, 'msg' => '业务引擎流转失败']);
         }
     }
 }

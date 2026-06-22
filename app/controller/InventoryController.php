@@ -18,6 +18,7 @@ class InventoryController
         if (!$name) return json(['code' => 400, 'msg' => '物品名称不能为空']);
 
         $initialStock = intval($request->post('initial_stock', 0));
+        $safetyStock = intval($request->post('safety_stock', 0));
 
         Db::beginTransaction();
         try {
@@ -25,6 +26,7 @@ class InventoryController
                 'name' => $name,
                 'category' => $request->post('category', 1),
                 'stock' => $initialStock,
+                'safety_stock' => $safetyStock,
                 'unit' => $request->post('unit', '个'),
                 'created_at' => date('Y-m-d H:i:s'),
                 'updated_at' => date('Y-m-d H:i:s')
@@ -71,9 +73,11 @@ class InventoryController
 
             $newStock = $item->stock;
 
-            if ($actionType == 1 || $actionType == 4) {
+            // 资产/流转流向分拣：1-采购入库, 4-归还, 5-盘盈入账
+            if ($actionType == 1 || $actionType == 4 || $actionType == 5) {
                 $newStock += $quantity;
-            } else if ($actionType == 2 || $actionType == 3) {
+            // 2-领用/消耗, 3-借出, 6-盘亏流出
+            } else if ($actionType == 2 || $actionType == 3 || $actionType == 6) {
                 if ($item->stock < $quantity) {
                     Db::rollBack();
                     return json(['code' => 400, 'msg' => "库存不足，当前仅剩 {$item->stock} {$item->unit}"]);
@@ -92,13 +96,13 @@ class InventoryController
                 'item_id' => $itemId,
                 'action_type' => $actionType,
                 'quantity' => $quantity,
-                'related_person' => $relatedPerson,
+                'related_person' => $relatedPerson ?: '系统自动审计',
                 'expected_return_date' => $actionType == 3 ? $expectedReturnDate : null,
                 'remark' => $remark,
                 'created_at' => date('Y-m-d H:i:s')
             ]);
 
-            // 双端消息分发引擎
+            // 双端消息分发引擎 (仅常规业务分发，5-盘盈、6-盘亏属于内部审计动作，不触达外部)
             if ($actionType == 2 || $actionType == 3) {
                 $actionName = $actionType == 3 ? '出借' : '发放';
                 $returnTips = ($actionType == 3 && $expectedReturnDate) ? " 请注意于 {$expectedReturnDate} 前完好交还至库房。" : "";

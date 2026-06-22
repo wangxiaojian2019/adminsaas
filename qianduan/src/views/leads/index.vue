@@ -9,6 +9,14 @@
         </div>
       </div>
 
+      <el-alert 
+        title="防囤积 SOP 规则执行中：线索超过 15 天未实质跟进将被强制流放至公海池。原拥有者将受到 7 天惩罚期限制不可重复捞回，团队内其他人可自由介入抢单。" 
+        type="error" 
+        show-icon 
+        :closable="false" 
+        style="margin-bottom: 20px;" 
+      />
+
       <el-tabs v-model="activeTab" class="leads-tabs" @tab-change="handleTabChange">
         <el-tab-pane name="private">
           <template #label>
@@ -31,7 +39,7 @@
         <el-table-column prop="customer_name" label="企业/客户名称" min-width="180">
           <template #default="{ row }">
             <span style="font-weight: bold; color: #303133;">{{ row.customer_name }}</span>
-            <el-tag v-if="activeTab === 'public'" size="small" type="danger" effect="dark" style="margin-left: 8px;">已掉落</el-tag>
+            <el-tag v-if="activeTab === 'public'" size="small" type="danger" effect="dark" style="margin-left: 8px;">流放池</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="contact_person" label="对接人" width="120" />
@@ -50,9 +58,14 @@
         <el-table-column label="归属与活跃状态" min-width="200">
           <template #default="{ row }">
             <div class="status-cell">
-              <div class="owner">当前归属：<el-tag size="small" :type="activeTab === 'public' ? 'danger' : 'info'">{{ row.responsible_person || '无归属(公海)' }}</el-tag></div>
-              <div class="time-track" :class="{ 'text-danger': isNearDrop(row.last_follow_time) && activeTab === 'private' }">
+              <div class="owner">当前归属：
+                <el-tag size="small" :type="activeTab === 'public' ? 'danger' : 'info'">{{ row.responsible_person || '系统公海池' }}</el-tag>
+              </div>
+              <div class="time-track" v-if="activeTab === 'private'" :class="{ 'text-danger': isNearDrop(row.last_follow_time) }">
                 最后心跳：{{ row.last_follow_time || row.created_at }}
+              </div>
+              <div class="time-track text-danger" v-else>
+                掉落时间：{{ row.drop_time }}
               </div>
             </div>
           </template>
@@ -66,7 +79,9 @@
 
         <el-table-column label="操作引擎" width="220" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" link icon="Microphone" @click="openFollowDialog(row)">录入跟进</el-button>
+            <el-button type="success" link icon="Microphone" @click="openFollowDialog(row)">
+              {{ activeTab === 'public' ? '捞取并跟进' : '录入跟进' }}
+            </el-button>
             <el-button type="primary" link icon="Document" @click="openHistoryDialog(row)">审查时间轴</el-button>
           </template>
         </el-table-column>
@@ -126,8 +141,8 @@
       </el-form>
       <div class="dialog-notice text-success" style="background-color: #f0f9eb; border-color: #e1f3d8;">
         <el-icon><CircleCheckFilled /></el-icon> 
-        <span v-if="activeTab === 'public'">提交跟进后，该公海线索将自动转入您的私海中！</span>
-        <span v-else>提交跟进后，此线索的15天私海保护期将被重置。</span>
+        <span v-if="activeTab === 'public'">提交并判定无防囤积拦截后，线索将立即划归至您的私海。</span>
+        <span v-else>提交跟进后，此线索的 15 天保护期倒计时将被重置。</span>
       </div>
       <template #footer>
         <el-button @click="followDialogVisible = false">取消</el-button>
@@ -244,12 +259,15 @@ const submitFollow = () => {
     submitLoading.value = true
     const payload = { lead_id: currentLeadId.value, ...followForm }
     const res = await request.post('/api/leads/follow/add', payload)
+    
+    // 【核心拦截反馈层】：捕获 403 惩罚状态并展示
     if (res.code === 200) {
       ElMessage.success(res.msg)
       followDialogVisible.value = false
-      // 跟进成功后，强制切回私海，因为公海的单子已经被你抢过来了！
       activeTab.value = 'private'
       fetchLeads() 
+    } else {
+      ElMessage.error(res.msg || '操作遭到拦截')
     }
     submitLoading.value = false
   })
@@ -266,7 +284,6 @@ const openHistoryDialog = async (row) => {
   }
 }
 
-// 判断是否濒临掉入公海(>12天未跟进)
 const isNearDrop = (trackTimeStr) => {
   if (!trackTimeStr) return true
   const trackTime = new Date(trackTimeStr).getTime()
@@ -303,7 +320,7 @@ onMounted(() => {
 .page-title { margin: 0; font-size: 20px; color: #303133; font-weight: 600; }
 .leads-tabs { margin-bottom: 10px; }
 .tab-label { font-size: 15px; font-weight: bold; display: flex; align-items: center; gap: 5px; }
-.text-danger { color: #f56c6c; }
+.text-danger { color: #f56c6c; font-weight: bold; }
 .text-muted { color: #909399; font-style: italic; }
 
 .status-cell { font-size: 13px; line-height: 1.8; }
