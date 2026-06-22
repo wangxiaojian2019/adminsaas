@@ -45,7 +45,6 @@
             </template>
           </el-table-column>
 
-          <!-- 核心新增：主管信息反显 -->
           <el-table-column label="直属层级" width="120" align="center">
             <template #default="{ row }">
               <span v-if="row.parent_name" style="color: #67c23a; font-weight: bold;"><el-icon><Avatar /></el-icon> {{ row.parent_name }}</span>
@@ -56,7 +55,7 @@
           <el-table-column prop="phone" label="联系电话" width="130" align="center" />
           <el-table-column label="账号状态" width="100" align="center">
             <template #default="{ row }">
-              <el-tag :type="row.status === 1 ? 'success' : 'danger'">{{ row.status === 1 ? '正常启用' : '已封禁' }}</el-tag>
+              <el-tag :type="Number(row.status) === 1 ? 'success' : 'danger'">{{ Number(row.status) === 1 ? '正常启用' : '已封禁' }}</el-tag>
             </template>
           </el-table-column>
 
@@ -69,31 +68,6 @@
                 </template>
               </el-popconfirm>
             </template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
-
-      <el-tab-pane label="数据防泄露与审计追踪" name="audits">
-        <div class="toolbar" style="display: flex; justify-content: space-between; align-items: center;">
-          <el-alert title="所有列表数据的导出操作均会打上隐形安全水印，并在此处永久留痕溯源。" type="warning" show-icon :closable="false" style="flex: 1; margin-right: 15px;" />
-          <el-button icon="Refresh" @click="fetchAudits">刷新审计日志</el-button>
-        </div>
-        <el-table :data="auditData" v-loading="auditLoading" border stripe style="width: 100%">
-          <el-table-column prop="id" label="审计流水号" width="120" align="center" />
-          <el-table-column label="操作人员" width="180">
-            <template #default="{ row }">
-              <span style="font-weight: bold; color: #409eff;">{{ row.admin_name }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="module_name" label="导出业务模块" min-width="150" />
-          <el-table-column prop="data_count" label="泄露风险量(条)" width="150" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.data_count > 100 ? 'danger' : 'info'">{{ row.data_count }} 条</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="ip_address" label="操作终端 IP" width="150" align="center" />
-          <el-table-column label="操作时间" width="180" align="center">
-            <template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template>
           </el-table-column>
         </el-table>
       </el-tab-pane>
@@ -144,10 +118,9 @@
           </el-select>
         </el-form-item>
 
-        <!-- 核心新增：直属主管绑定引擎 -->
         <el-form-item label="绑定直属主管" prop="parent_id">
           <el-select v-model="adminForm.parent_id" placeholder="业务类人员必填" clearable style="width: 100%">
-            <el-option v-for="manager in managerOptions" :key="manager.id" :label="manager.real_name + ' (' + manager.role_name + ')'" :value="manager.id" />
+            <el-option v-for="manager in managerOptions" :key="manager.id" :label="`${manager.real_name || '未命名'} (${manager.role_name || '未定岗'})`" :value="manager.id" />
           </el-select>
         </el-form-item>
 
@@ -169,6 +142,7 @@
 <script setup>
 import { ref, reactive, onMounted, nextTick, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Plus, Refresh, Edit, Delete, User, Avatar } from '@element-plus/icons-vue'
 import request from '../../utils/request'
 
 const activeTab = ref('roles')
@@ -176,13 +150,13 @@ const submitLoading = ref(false)
 
 const roleData = ref([]); const roleLoading = ref(false)
 const adminData = ref([]); const adminLoading = ref(false)
-const auditData = ref([]); const auditLoading = ref(false)
 
 const roleDialogVisible = ref(false); const roleFormRef = ref(null)
 const isRoleEditMode = ref(false)
 const roleForm = reactive({ id: null, role_name: '', data_scope: 1 })
 const roleRules = { role_name: [{ required: true, message: '必须定义角色名称', trigger: 'blur' }] }
 
+// 写死的底层权限字典（与数据库 permissions 表 ID 严格对应）
 const systemModules = [
   { id: 1, name: '运营数据指挥舱' },
   { id: 2, name: '大厦与资产大盘' },
@@ -203,7 +177,6 @@ const adminDialogVisible = ref(false); const adminFormRef = ref(null)
 const isAdminEditMode = ref(false)
 const adminForm = reactive({ id: null, username: '', password: '', real_name: '', phone: '', role_id: '', parent_id: null, status: 1 })
 
-// 智能剔除：在选择主管时，不能将自己设为自己的主管
 const managerOptions = computed(() => {
   return adminData.value.filter(item => item.id !== adminForm.id)
 })
@@ -216,27 +189,11 @@ const validatePassword = (rule, value, callback) => {
   }
 }
 
-// 核心规则：动态拦截器
-const validateParentId = (rule, value, callback) => {
-  const selectedRole = roleData.value.find(r => r.id === adminForm.role_id)
-  if (selectedRole) {
-    const rName = selectedRole.role_name || ''
-    if (rName.includes('业务') || rName.includes('专员') || rName.includes('一线') || rName.includes('销售')) {
-      if (!value) {
-        callback(new Error('系统级硬性约束：此类人员必须挂靠直属主管'))
-        return
-      }
-    }
-  }
-  callback()
-}
-
 const adminRules = { 
   username: [{ required: true, message: '请输入登录账号', trigger: 'blur' }], 
   password: [{ validator: validatePassword, trigger: 'blur' }], 
   real_name: [{ required: true, message: '请输入真实姓名', trigger: 'blur' }],
-  role_id: [{ required: true, message: '必须选择业务角色', trigger: 'change' }],
-  parent_id: [{ validator: validateParentId, trigger: 'change' }] 
+  role_id: [{ required: true, message: '必须选择业务角色', trigger: 'change' }]
 }
 
 const fetchRoles = async () => {
@@ -251,13 +208,6 @@ const fetchAdmins = async () => {
   const res = await request.get('/api/system/admins/list')
   if (res.code === 200) adminData.value = res.data
   adminLoading.value = false
-}
-
-const fetchAudits = async () => {
-  auditLoading.value = true
-  const res = await request.get('/api/system/audit/logs')
-  if (res.code === 200) auditData.value = res.data
-  auditLoading.value = false
 }
 
 const openAddRole = () => {
@@ -331,7 +281,8 @@ const openEditAdmin = (row) => {
   adminForm.phone = row.phone
   adminForm.role_id = row.role_id
   adminForm.parent_id = row.parent_id === 0 ? null : row.parent_id
-  adminForm.status = row.status
+  // 核心修复：强制转换为数字，匹配 switch 开关的 1 和 0
+  adminForm.status = Number(row.status)
   adminDialogVisible.value = true
 }
 
@@ -341,8 +292,8 @@ const submitAdmin = () => {
     submitLoading.value = true
     const endpoint = isAdminEditMode.value ? '/api/system/admins/update' : '/api/system/admins/add'
     
-    // 清洗参数，保证后端收到 0 而非 null
     const payload = { ...adminForm }
+    // 强制转换为 0 以免后台保存 null 报错
     if (!payload.parent_id) payload.parent_id = 0
 
     const res = await request.post(endpoint, payload)
@@ -373,7 +324,6 @@ const getScopeColor = (s) => ({ 1: 'info', 2: 'warning', 3: 'danger' }[s])
 onMounted(() => { 
   fetchRoles()
   fetchAdmins()
-  fetchAudits() 
 })
 </script>
 

@@ -6,118 +6,144 @@ use support\Db;
 
 class SystemController
 {
-    // ==========================================
-    // 区块一：角色业务控制区
-    // ==========================================
+    public function getMyMenus(Request $request)
+    {
+        // 核心修复：使用 Token 鉴权中的 $request->user，而不是 Session
+        $admin = $request->user;
+        if (!$admin) return json(['code' => 401, 'msg' => '登录已失效']);
+
+        $roleId = $admin->role_id ?? 1;
+
+        if ($roleId == 1) {
+            $menus = Db::table('permissions')->where('type', 1)->orderBy('sort', 'asc')->get();
+        } else {
+            $role = Db::table('roles')->where('id', $roleId)->first();
+            $menuIds = [];
+            
+            if ($role && isset($role->menu_ids) && !empty($role->menu_ids)) {
+                $menuIds = explode(',', $role->menu_ids);
+            }
+
+            if (empty($menuIds)) {
+                $menus = []; 
+            } else {
+                $menus = Db::table('permissions')
+                    ->whereIn('id', $menuIds)
+                    ->where('type', 1)
+                    ->orderBy('sort', 'asc')
+                    ->get();
+            }
+        }
+
+        return json(['code' => 200, 'msg' => 'success', 'data' => $menus]);
+    }
 
     public function roleList(Request $request)
     {
         $list = Db::table('roles')->get();
         foreach ($list as $key => $role) {
-            $list[$key]->permissions = Db::table('role_permissions')
-                ->where('role_id', $role->id)
-                ->pluck('permission_id')
-                ->toArray();
+            $pIds = !empty($role->menu_ids) ? explode(',', $role->menu_ids) : [];
+            $list[$key]->permissions = array_map('intval', $pIds);
         }
         return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
 
     public function roleAdd(Request $request)
     {
+        $perms = $request->post('permissions', []);
+        $menu_ids = is_array($perms) ? implode(',', $perms) : '';
+
         $roleId = Db::table('roles')->insertGetId([
-            'role_name' => $request->post('role_name'),
+            'role_name' => $request->post('role_name') ?: $request->post('name'),
             'data_scope' => $request->post('data_scope', 1),
+            'menu_ids' => $menu_ids,
             'created_at' => date('Y-m-d H:i:s')
         ]);
 
-        $permissions = $request->post('permissions', []);
-        if (!empty($permissions)) {
+        if (!empty($perms)) {
             $inserts = [];
-            foreach ($permissions as $pid) {
+            foreach ($perms as $pid) {
                 $inserts[] = ['role_id' => $roleId, 'permission_id' => $pid];
             }
             Db::table('role_permissions')->insert($inserts);
         }
-        return json(['code' => 200, 'msg' => '角色创立及授权成功']);
+        return json(['code' => 200, 'msg' => '角色新增成功']);
     }
 
     public function roleUpdate(Request $request)
     {
         $id = $request->post('id');
+        $perms = $request->post('permissions', []);
+        $menu_ids = is_array($perms) ? implode(',', $perms) : '';
+
         Db::table('roles')->where('id', $id)->update([
-            'role_name' => $request->post('role_name'),
-            'data_scope' => $request->post('data_scope')
+            'role_name' => $request->post('role_name') ?: $request->post('name'),
+            'data_scope' => $request->post('data_scope'),
+            'menu_ids' => $menu_ids
         ]);
 
         Db::table('role_permissions')->where('role_id', $id)->delete();
-        $permissions = $request->post('permissions', []);
-        if (!empty($permissions)) {
+        if (!empty($perms)) {
             $inserts = [];
-            foreach ($permissions as $pid) {
+            foreach ($perms as $pid) {
                 $inserts[] = ['role_id' => $id, 'permission_id' => $pid];
             }
             Db::table('role_permissions')->insert($inserts);
         }
-        return json(['code' => 200, 'msg' => '角色参数更新生效']);
+        return json(['code' => 200, 'msg' => '角色权限分配已生效']);
     }
 
     public function roleDelete(Request $request)
     {
         $id = $request->post('id');
         $count = Db::table('admins')->where('role_id', $id)->count();
-        if ($count > 0) {
-            return json(['code' => 403, 'msg' => '删除驳回：当前仍有子账号正在使用该业务角色！']);
-        }
+        if ($count > 0) return json(['code' => 403, 'msg' => '有账号绑定该角色，无法删除']);
         Db::table('roles')->where('id', $id)->delete();
         Db::table('role_permissions')->where('role_id', $id)->delete();
-        return json(['code' => 200, 'msg' => '节点删除成功']);
+        return json(['code' => 200, 'msg' => '角色已删除']);
     }
-
-    // ==========================================
-    // 区块二：子账号生命周期控制区 (核心算法对齐)
-    // ==========================================
 
     public function adminList(Request $request)
     {
         $list = Db::table('admins')
             ->leftJoin('roles', 'admins.role_id', '=', 'roles.id')
+            ->leftJoin('admins as parent', 'admins.parent_id', '=', 'parent.id')
             ->select(
-                'admins.id', 
-                'admins.username', 
-                'admins.real_name', 
-                'admins.phone', 
-                'admins.status', 
-                'admins.role_id',
-                'admins.created_at', 
-                'roles.role_name'
+                'admins.*', 
+                'roles.role_name', 
+                'parent.real_name as parent_name'
             )
+            ->orderBy('admins.id', 'asc')
             ->get();
+            
         return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
 
     public function adminAdd(Request $request)
     {
+        $exists = Db::table('admins')->where('username', $request->post('username'))->first();
+        if ($exists) return json(['code' => 400, 'msg' => '账号已存在']);
+
         Db::table('admins')->insert([
             'username' => $request->post('username'),
-            // 核心修复：强制降维对齐登录底座的 MD5 算法
-            'password' => md5($request->post('password', '123456')),
+            'password' => md5($request->post('password')),
             'real_name' => $request->post('real_name'),
             'phone' => $request->post('phone'),
             'role_id' => $request->post('role_id'),
-            'department_id' => $request->post('department_id', 0),
+            'parent_id' => $request->post('parent_id') ?: 0,
             'status' => $request->post('status', 1),
             'created_at' => date('Y-m-d H:i:s')
         ]);
-        return json(['code' => 200, 'msg' => 'success']);
+        return json(['code' => 200, 'msg' => '账号分配成功']);
     }
 
     public function adminUpdate(Request $request)
     {
         $id = $request->post('id');
-        $user = $request->user;
+        $admin = $request->user;
 
-        if ($id == 1 && $user->id != 1) {
-            return json(['code' => 403, 'msg' => '越权拦截：不可修改系统超管档案']);
+        if ($id == 1 && $admin->id != 1) {
+            return json(['code' => 403, 'msg' => '不可越权修改系统超管档案']);
         }
 
         $data = [
@@ -125,68 +151,23 @@ class SystemController
             'real_name' => $request->post('real_name'),
             'phone' => $request->post('phone'),
             'role_id' => $request->post('role_id'),
+            'parent_id' => $request->post('parent_id') ?: 0,
             'status' => $request->post('status', 1)
         ];
 
         $password = $request->post('password');
         if (!empty($password)) {
-            // 核心修复：强制降维对齐登录底座的 MD5 算法
             $data['password'] = md5($password);
         }
 
         Db::table('admins')->where('id', $id)->update($data);
-        return json(['code' => 200, 'msg' => '子账号档案更新成功']);
+        return json(['code' => 200, 'msg' => '信息已更新']);
     }
 
     public function adminDelete(Request $request)
     {
-        $id = $request->post('id');
-        
-        if ($id == 1) {
-            return json(['code' => 403, 'msg' => '系统物理保护：初始超级管理员不可被抹除']);
-        }
-
-        Db::table('admins')->where('id', $id)->delete();
-        return json(['code' => 200, 'msg' => '子账号已安全注销并释放']);
-    }
-
-    // ==========================================
-    // 区块三：动态权限引擎区
-    // ==========================================
-
-    public function getMyMenus(Request $request)
-    {
-        $user = $request->user;
-        if (!$user) {
-            return json(['code' => 401, 'msg' => '未授权访问']);
-        }
-
-        $menus = Db::table('permissions')
-            ->join('role_permissions', 'permissions.id', '=', 'role_permissions.permission_id')
-            ->where('role_permissions.role_id', $user->role_id)
-            ->where('permissions.type', 1) 
-            ->select('permissions.*')
-            ->orderBy('permissions.sort', 'asc')
-            ->get();
-
-        $tree = $this->buildTree($menus->toArray());
-
-        return json(['code' => 200, 'msg' => 'success', 'data' => $tree]);
-    }
-
-    private function buildTree($elements, $parentId = 0) 
-    {
-        $branch = array();
-        foreach ($elements as $element) {
-            $elementArr = (array) $element;
-            if ($elementArr['parent_id'] == $parentId) {
-                $children = $this->buildTree($elements, $elementArr['id']);
-                if ($children) {
-                    $elementArr['children'] = $children;
-                }
-                $branch[] = $elementArr;
-            }
-        }
-        return $branch;
+        if ($request->post('id') == 1) return json(['code' => 403, 'msg' => '创始账号不可删除']);
+        Db::table('admins')->where('id', $request->post('id'))->delete();
+        return json(['code' => 200, 'msg' => '账号已收回']);
     }
 }

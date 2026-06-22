@@ -13,14 +13,14 @@
         <el-tab-pane name="private">
           <template #label>
             <span class="tab-label">
-              <el-icon><Briefcase /></el-icon> 私海 (我的线索/团队线索)
+              <el-icon><Briefcase /></el-icon> 客户私海 (我的线索/团队线索)
             </span>
           </template>
         </el-tab-pane>
         <el-tab-pane name="public">
           <template #label>
             <span class="tab-label text-danger">
-              <el-icon><WarnTriangleFilled /></el-icon> 公海 (沉睡掉落池)
+              <el-icon><WarnTriangleFilled /></el-icon> 客户公海 (沉睡掉落池)
             </span>
           </template>
         </el-tab-pane>
@@ -50,9 +50,9 @@
         <el-table-column label="归属与活跃状态" min-width="200">
           <template #default="{ row }">
             <div class="status-cell">
-              <div class="owner">当前归属：<el-tag size="small" type="info">{{ row.owner_name || '无归属(公海)' }}</el-tag></div>
-              <div class="time-track" :class="{ 'text-danger': isNearDrop(row.last_track_time) && activeTab === 'private' }">
-                最后心跳：{{ row.last_track_time || row.created_at }}
+              <div class="owner">当前归属：<el-tag size="small" :type="activeTab === 'public' ? 'danger' : 'info'">{{ row.responsible_person || '无归属(公海)' }}</el-tag></div>
+              <div class="time-track" :class="{ 'text-danger': isNearDrop(row.last_follow_time) && activeTab === 'private' }">
+                最后心跳：{{ row.last_follow_time || row.created_at }}
               </div>
             </div>
           </template>
@@ -107,11 +107,12 @@
 
     <el-dialog v-model="followDialogVisible" title="录入业务跟进纪要" width="600px" @close="followFormRef?.resetFields()">
       <el-form ref="followFormRef" :model="followForm" :rules="followRules" label-width="110px">
-        <el-form-item label="意向级别判断" prop="intent_level">
-          <el-radio-group v-model="followForm.intent_level">
-            <el-radio-button label="高">高意向 (随时签约)</el-radio-button>
-            <el-radio-button label="中">中意向 (需持续触达)</el-radio-button>
-            <el-radio-button label="低">低意向 (保持观望)</el-radio-button>
+        <el-form-item label="更新线索状态" prop="status">
+          <el-radio-group v-model="followForm.status">
+            <el-radio-button :label="1">持续跟进</el-radio-button>
+            <el-radio-button :label="2">意向强烈</el-radio-button>
+            <el-radio-button :label="3">已签约</el-radio-button>
+            <el-radio-button :label="4">已流失</el-radio-button>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="跟进纪要内容" prop="content">
@@ -122,23 +123,15 @@
             placeholder="请详细记录本次沟通的核心诉求、抗拒点及下一步动作..." 
           />
         </el-form-item>
-        <el-form-item label="下次跟进计划" prop="next_follow_time">
-          <el-date-picker
-            v-model="followForm.next_follow_time"
-            type="datetime"
-            placeholder="选择下次需触达的时间节点"
-            format="YYYY-MM-DD HH:mm"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            style="width: 100%;"
-          />
-        </el-form-item>
       </el-form>
       <div class="dialog-notice text-success" style="background-color: #f0f9eb; border-color: #e1f3d8;">
-        <el-icon><CircleCheckFilled /></el-icon> 提交跟进后，此线索的15天私海保护期将被重置。
+        <el-icon><CircleCheckFilled /></el-icon> 
+        <span v-if="activeTab === 'public'">提交跟进后，该公海线索将自动转入您的私海中！</span>
+        <span v-else>提交跟进后，此线索的15天私海保护期将被重置。</span>
       </div>
       <template #footer>
         <el-button @click="followDialogVisible = false">取消</el-button>
-        <el-button type="success" :loading="submitLoading" @click="submitFollow">写入纪要并重置心跳</el-button>
+        <el-button type="success" :loading="submitLoading" @click="submitFollow">写入纪要并执行流转</el-button>
       </template>
     </el-dialog>
 
@@ -151,17 +144,13 @@
             :key="index"
             :timestamp="activity.created_at"
             placement="top"
-            :color="activity.intent_level === '高' ? '#f56c6c' : (activity.intent_level === '中' ? '#e6a23c' : '#909399')"
+            color="#409eff"
           >
             <el-card shadow="hover" class="timeline-card">
               <div class="timeline-header">
                 <span class="operator"><el-icon><User /></el-icon> {{ activity.operator_name }}</span>
-                <el-tag size="small" :type="activity.intent_level === '高' ? 'danger' : 'warning'">意向: {{ activity.intent_level }}</el-tag>
               </div>
               <div class="timeline-content">{{ activity.content }}</div>
-              <div v-if="activity.next_follow_time" class="timeline-footer">
-                <el-icon><Timer /></el-icon> 计划下次跟进: {{ activity.next_follow_time }}
-              </div>
             </el-card>
           </el-timeline-item>
         </el-timeline>
@@ -173,6 +162,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Briefcase, WarnTriangleFilled, Plus, Download, InfoFilled, CircleCheckFilled, Microphone, Document, User } from '@element-plus/icons-vue'
 import request from '../../utils/request'
 
 const activeTab = ref('private')
@@ -194,7 +184,7 @@ const addRules = {
   phone: [{ required: true, message: '联系电话是后续跟进唯一凭证', trigger: 'blur' }]
 }
 
-const followForm = reactive({ intent_level: '中', content: '', next_follow_time: '' })
+const followForm = reactive({ status: 1, content: '' })
 const followRules = {
   content: [{ required: true, message: '请务必填写沟通纪要，防敷衍审计', trigger: 'blur' }]
 }
@@ -205,8 +195,14 @@ const historyLoading = ref(false)
 const fetchLeads = async () => {
   loading.value = true
   try {
-    const res = await request.get(`/api/leads/list?type=${activeTab.value}`)
-    if (res.code === 200) tableData.value = res.data
+    const res = await request.get(`/api/leads/list`)
+    if (res.code === 200) {
+      if (activeTab.value === 'private') {
+        tableData.value = res.data.filter(item => item.admin_id !== 0)
+      } else {
+        tableData.value = res.data.filter(item => item.admin_id === 0)
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -217,6 +213,7 @@ const handleTabChange = () => {
 }
 
 const openAddDialog = () => { addDialogVisible.value = true }
+
 const submitAdd = () => {
   addFormRef.value.validate(async (valid) => {
     if (!valid) return
@@ -227,6 +224,8 @@ const submitAdd = () => {
       addDialogVisible.value = false
       activeTab.value = 'private' 
       fetchLeads()
+    } else {
+      ElMessage.error(res.msg)
     }
     submitLoading.value = false
   })
@@ -234,6 +233,8 @@ const submitAdd = () => {
 
 const openFollowDialog = (row) => {
   currentLeadId.value = row.id
+  followForm.status = row.status || 1
+  followForm.content = ''
   followDialogVisible.value = true
 }
 
@@ -246,6 +247,8 @@ const submitFollow = () => {
     if (res.code === 200) {
       ElMessage.success(res.msg)
       followDialogVisible.value = false
+      // 跟进成功后，强制切回私海，因为公海的单子已经被你抢过来了！
+      activeTab.value = 'private'
       fetchLeads() 
     }
     submitLoading.value = false
@@ -263,6 +266,7 @@ const openHistoryDialog = async (row) => {
   }
 }
 
+// 判断是否濒临掉入公海(>12天未跟进)
 const isNearDrop = (trackTimeStr) => {
   if (!trackTimeStr) return true
   const trackTime = new Date(trackTimeStr).getTime()
@@ -271,7 +275,6 @@ const isNearDrop = (trackTimeStr) => {
   return diffDays > 12 
 }
 
-// 核心新增：招商线索加密导出逻辑
 const exportData = async () => {
   ElMessage.info('正在提取线索明细数据...')
   const token = localStorage.getItem('saas_token')
@@ -314,5 +317,4 @@ onMounted(() => {
 .timeline-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px dashed #ebeef5; padding-bottom: 8px; }
 .operator { font-weight: bold; color: #409eff; display: flex; align-items: center; gap: 4px; }
 .timeline-content { font-size: 14px; color: #303133; line-height: 1.6; white-space: pre-wrap; }
-.timeline-footer { margin-top: 12px; padding-top: 8px; border-top: 1px solid #f4f4f5; font-size: 12px; color: #909399; display: flex; align-items: center; gap: 4px; }
 </style>

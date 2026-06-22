@@ -2,13 +2,29 @@
   <div class="finance-container">
     <el-tabs v-model="activeTab" type="border-card" class="custom-tabs" @tab-click="handleTabClick">
       
+      <!-- ================= 账单模块 ================= -->
       <el-tab-pane label="常规应收账单中心" name="bills">
-        <div class="toolbar">
-          <el-button type="warning" icon="Download" @click="exportData">带水印导出财务报表</el-button>
-          <el-button icon="Refresh" @click="fetchBills">刷新流水</el-button>
+        <div class="toolbar" style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+          <div class="filter-panel" style="display: flex; gap: 10px; align-items: center;">
+            <span class="filter-label">台账检索:</span>
+            <el-input v-model="billFilter.enterprise" placeholder="付款方企业" clearable style="width: 160px;" />
+            <el-input v-model="billFilter.space" placeholder="关联空间(如:A栋)" clearable style="width: 160px;" />
+            <el-select v-model="billFilter.type" placeholder="费用科目" clearable style="width: 140px;">
+              <el-option label="场地租金" :value="1" />
+              <el-option label="水费出账" :value="2" />
+              <el-option label="电费出账" :value="3" />
+              <el-option label="物业/车位" :value="4" />
+              <el-option label="违约滞纳金" :value="5" />
+              <el-option label="履约押金" :value="6" />
+            </el-select>
+          </div>
+          <div>
+            <el-button type="warning" icon="Download" @click="exportData">带水印导出</el-button>
+            <el-button icon="Refresh" @click="fetchBills">刷新流水</el-button>
+          </div>
         </div>
 
-        <el-table :data="billData" v-loading="billLoading" border stripe style="width: 100%">
+        <el-table :data="processedBillData" v-loading="billLoading" border stripe style="width: 100%">
           <el-table-column prop="id" label="单号" width="70" align="center" />
           <el-table-column prop="enterprise_name" label="付款方企业" min-width="160" show-overflow-tooltip />
           <el-table-column label="关联空间" width="140" align="center">
@@ -49,7 +65,7 @@
               <el-button v-if="row.is_paid === 2" type="warning" link icon="View" @click="openReviewDialog(row)">审阅单据</el-button>
               <el-popconfirm v-else-if="row.is_paid === 0 || row.is_paid === 3" title="确认收到线下款项并强制核销？" @confirm="handlePay(row.id, 'approve')">
                 <template #reference>
-                  <el-button type="primary" link icon="Select">强制核销</el-button>
+                  <el-button type="primary" link icon="Check">强制核销</el-button>
                 </template>
               </el-popconfirm>
               <div v-else class="timeline-text text-success" title="财务执行核销确认的物理时间">核销于: {{ row.paid_time }}</div>
@@ -58,11 +74,18 @@
         </el-table>
       </el-tab-pane>
 
+      <!-- ================= 退租模块 ================= -->
       <el-tab-pane label="退租清算与退款沙盘" name="checkouts">
-        <div class="toolbar">
+        <div class="toolbar" style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+          <div class="filter-panel" style="display: flex; gap: 10px; align-items: center;">
+            <span class="filter-label">清算检索:</span>
+            <el-input v-model="checkoutFilter.enterprise" placeholder="退租企业" clearable style="width: 160px;" />
+            <el-input v-model="checkoutFilter.space" placeholder="关联空间" clearable style="width: 160px;" />
+            <el-input v-model="checkoutFilter.contract_no" placeholder="底层契约号" clearable style="width: 180px;" />
+          </div>
           <el-button icon="Refresh" @click="fetchCheckouts">重新抓取清算数据</el-button>
         </div>
-        <el-table :data="checkoutData" v-loading="checkoutLoading" border stripe style="width: 100%">
+        <el-table :data="processedCheckoutData" v-loading="checkoutLoading" border stripe style="width: 100%">
           <el-table-column prop="id" label="单号" width="70" align="center" />
           <el-table-column label="底层契约号" width="160" align="center">
             <template #default="{ row }"><span class="text-code">{{ row.contract_no }}</span></template>
@@ -107,7 +130,7 @@
             <template #default="{ row }">
               <el-popconfirm v-if="row.status === 0" :title="row.actual_refund >= 0 ? '确认已线下打款退还？' : '确认已收回追缴款？'" @confirm="handleCheckoutPay(row.id)">
                 <template #reference>
-                  <el-button type="success" link icon="WalletCheck">
+                  <el-button type="success" link icon="Money">
                     {{ row.actual_refund >= 0 ? '打款结清' : '追缴结清' }}
                   </el-button>
                 </template>
@@ -118,12 +141,18 @@
         </el-table>
       </el-tab-pane>
 
+      <!-- ================= 抄表模块 ================= -->
       <el-tab-pane label="后勤能耗抄表台账" name="meters">
-        <div class="toolbar" style="margin-bottom: 15px;">
-          <el-alert title="系统已自动提取租户入驻时填写的【期初底数】作为初始账本。每月抄表入账后，系统将自动算出差值并向企业推送水电账单。" type="warning" show-icon :closable="false" style="width: 100%" />
-          <el-button icon="Refresh" @click="fetchMeters" style="margin-left: 15px;">刷新台账</el-button>
+        <el-alert title="系统已自动提取租户入驻时填写的【期初底数】作为初始账本。每月抄表入账后，系统将自动算出差值并向企业推送水电账单。" type="warning" show-icon :closable="false" style="width: 100%; margin-bottom: 15px;" />
+        <div class="toolbar" style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+          <div class="filter-panel" style="display: flex; gap: 10px; align-items: center;">
+            <span class="filter-label">能耗检索:</span>
+            <el-input v-model="meterFilter.enterprise" placeholder="承租企业" clearable style="width: 160px;" />
+            <el-input v-model="meterFilter.space" placeholder="关联空间" clearable style="width: 160px;" />
+          </div>
+          <el-button icon="Refresh" @click="fetchMeters">刷新台账</el-button>
         </div>
-        <el-table :data="metersList" v-loading="metersLoading" border stripe style="width: 100%">
+        <el-table :data="processedMetersList" v-loading="metersLoading" border stripe style="width: 100%">
           <el-table-column label="关联空间" width="150" align="center">
             <template #default="{ row }">
               <span style="font-weight: bold; color: #409eff;">{{ row.building_name }}-{{ row.room_number }}</span>
@@ -137,11 +166,10 @@
               <div style="font-size: 11px; color: #c0c4cc;">最后存档: {{ row.last_water_date }}</div>
             </template>
           </el-table-column>
-          
-          <el-table-column label="水费操作" align="center" width="160">
+          <el-table-column label="水费核算操作" align="center" width="160">
             <template #default="{ row }">
               <el-button type="primary" plain size="small" @click="openMeterDialog(row, 1)">抄记</el-button>
-              <el-button type="info" link size="small" @click="openHistoryDrawer(row, 1)">流水</el-button>
+              <el-button type="success" plain size="small" icon="List" @click="openHistoryDrawer(row, 1)">事件记录</el-button>
             </template>
           </el-table-column>
           
@@ -151,17 +179,17 @@
               <div style="font-size: 11px; color: #c0c4cc;">最后存档: {{ row.last_elec_date }}</div>
             </template>
           </el-table-column>
-          
-          <el-table-column label="电费操作" align="center" width="160">
+          <el-table-column label="电费核算操作" align="center" width="160">
             <template #default="{ row }">
               <el-button type="warning" plain size="small" @click="openMeterDialog(row, 2)">抄记</el-button>
-              <el-button type="info" link size="small" @click="openHistoryDrawer(row, 2)">流水</el-button>
+              <el-button type="success" plain size="small" icon="List" @click="openHistoryDrawer(row, 2)">事件记录</el-button>
             </template>
           </el-table-column>
         </el-table>
       </el-tab-pane>
     </el-tabs>
 
+    <!-- 打款审核弹窗 -->
     <el-dialog v-model="reviewDialogVisible" title="对公转账凭证审核室" width="550px">
       <div v-if="currentReviewBill.receipt_url" style="text-align: center;">
         <p class="review-tips">点击图片可放大查看流水号等细节</p>
@@ -174,15 +202,9 @@
             <p><strong>打款企业：</strong>{{ currentReviewBill.enterprise_name }}</p>
             <p><strong>应核销金额：</strong><span class="amount-text">￥{{ currentReviewBill.amount }}</span></p>
         </div>
-        
         <div style="margin-top: 15px; text-align: left;">
           <p style="font-size: 13px; color: #606266; margin-bottom: 8px;">若需驳回，请填写驳回原因：</p>
-          <el-input 
-            v-model="rejectReasonText" 
-            type="textarea" 
-            :rows="2" 
-            placeholder="例如：凭证截图不完整、金额与应收不符等..." 
-          />
+          <el-input v-model="rejectReasonText" type="textarea" :rows="2" placeholder="例如：凭证截图不完整、金额与应收不符等..." />
         </div>
       </div>
       <div v-else><el-empty description="未获取到电子回执单图片" :image-size="60" /></div>
@@ -195,19 +217,19 @@
       </template>
     </el-dialog>
 
+    <!-- 抄表录入弹窗 -->
     <el-dialog v-model="meterDialogVisible" :title="`${currentMeter.building_name}-${currentMeter.room_number} 月度能耗抄表`" width="450px" @close="meterFormRef?.resetFields()">
-      
       <div style="background-color: #f0f9eb; padding: 15px; border-radius: 6px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e1f3d8;">
         <div>
            <div style="color: #67c23a; font-weight: bold;">系统上次存档底数</div>
-           <div style="font-size: 12px; color: #909399; margin-top: 4px;">上次抄表于: {{ lastMeterDate }}</div>
+           <div style="font-size: 12px; color: #909399; margin-top: 4px;">抄表时间: {{ lastMeterDate }}</div>
         </div>
         <span style="font-size: 24px; font-weight: bold; color: #67c23a; font-family: monospace;">{{ lastMeterReading }}</span>
       </div>
 
       <el-form ref="meterFormRef" :model="meterForm" label-width="120px">
         <el-form-item label="本次表盘读数" prop="current_reading" :rules="[{ required: true, message: '不可为空' }]">
-          <el-input-number v-model="meterForm.current_reading" :min="lastMeterReading" :precision="2" controls-position="right" style="width: 100%;" />
+          <el-input-number v-model="meterForm.current_reading" :min="Number(lastMeterReading) || 0" :precision="2" controls-position="right" style="width: 100%;" />
         </el-form-item>
         
         <el-form-item label="计费单价(元)" prop="price" :rules="[{ required: true, message: '单价不可为空' }]">
@@ -234,23 +256,41 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="historyDrawerVisible" :title="`【${currentMeter.building_name}-${currentMeter.room_number}】${currentHistoryType === 1 ? '水表' : '电表'} 抄表记录`" size="400px">
+    <!-- 【核心新增】：抄表事件记录与账单推送流向溯源抽屉 -->
+    <el-drawer v-model="historyDrawerVisible" :title="`【${currentMeter.building_name}-${currentMeter.room_number}】${currentHistoryType === 1 ? '水表' : '电表'} 抄表事件记录`" size="450px">
       <div v-loading="historyLoading" style="padding: 10px;">
         <el-timeline>
           <el-timeline-item
-            v-for="(item, index) in historyList"
+            v-for="item in processedHistoryList"
             :key="item.id"
-            :type="index === 0 ? 'success' : 'info'"
-            :timestamp="item.created_at"
+            :type="item.is_latest ? 'success' : 'info'"
+            :timestamp="`抄表入库时间: ${item.created_at}`"
             placement="top"
           >
-            <el-card shadow="hover" :style="{ border: index === 0 ? '1px solid #67c23a' : '' }">
-              <div style="font-weight: bold; font-size: 16px;">存档读数: {{ item.current_reading }}</div>
-              <div style="font-size: 12px; color: #909399; margin-top: 5px;">归属月份: {{ item.record_month }}</div>
+            <el-card shadow="hover" :style="{ border: item.is_latest ? '1px solid #67c23a' : '' }">
+              <div style="font-size: 13px; color: #606266;">归属计费月份: <span style="font-weight:bold;color:#303133;">{{ item.record_month }}</span></div>
+              <div style="margin-top: 8px; font-size: 13px;">上次底数参照: <span style="font-family:monospace;">{{ item.last_reading }}</span></div>
+              <div style="margin-top: 4px; font-size: 13px;">本次实际读数: <span style="font-family:monospace;">{{ item.current_reading }}</span></div>
+              <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ebeef5; color: #e6a23c; font-size: 13px;">
+                系统核算用量差值: <strong style="font-size: 16px; color: #f56c6c; font-family: monospace; float: right;">{{ item.usage_amount }}</strong>
+              </div>
+              
+              <!-- 核心展示：这里展示推送给了谁 -->
+              <div v-if="item.billed_amount > 0" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ebeef5; font-size: 13px; background-color: #f0f9eb; padding: 10px; border-radius: 4px;">
+                <div style="color: #67c23a; font-weight: bold; margin-bottom: 5px;">
+                  <el-icon><Check /></el-icon> 已自动生成账单: ¥{{ item.billed_amount }}
+                </div>
+                <div style="color: #606266;">
+                  <el-icon><Position /></el-icon> 账单信使已推送至: <strong style="color:#409eff">{{ item.pushed_to }}</strong>
+                </div>
+              </div>
+              <div v-else style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ebeef5; font-size: 12px; color: #909399;">
+                <el-icon><InfoFilled /></el-icon> 初始底数建档，未产生费用账单
+              </div>
             </el-card>
           </el-timeline-item>
         </el-timeline>
-        <el-empty v-if="!historyLoading && historyList.length === 0" description="暂无抄表流水" />
+        <el-empty v-if="!historyLoading && processedHistoryList.length === 0" description="暂无抄表事件记录" />
       </div>
     </el-drawer>
   </div>
@@ -258,14 +298,13 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Warning, View, Select } from '@element-plus/icons-vue'
+// 核心修复：引入 Position, InfoFilled, Check 等真实存在的 ElementPlus 图标
+import { Refresh, Warning, View, List, Download, Check, Money, Position, InfoFilled } from '@element-plus/icons-vue'
 import request from '../../utils/request'
 
-const route = useRoute()
 const router = useRouter()
-
 const activeTab = ref('bills')
 const submitLoading = ref(false)
 
@@ -273,13 +312,50 @@ const billData = ref([]); const billLoading = ref(false)
 const checkoutData = ref([]); const checkoutLoading = ref(false)
 const metersList = ref([]); const metersLoading = ref(false)
 
+// ==========================
+// 全局检索/过滤逻辑
+// ==========================
+const billFilter = reactive({ enterprise: '', space: '', type: '' })
+const checkoutFilter = reactive({ enterprise: '', space: '', contract_no: '' })
+const meterFilter = reactive({ enterprise: '', space: '' })
+
+const processedBillData = computed(() => {
+  return billData.value.filter(row => {
+    if (billFilter.enterprise && !(row.enterprise_name || '').includes(billFilter.enterprise)) return false;
+    const spaceStr = (row.building_name || '') + (row.room_number || '');
+    if (billFilter.space && !spaceStr.includes(billFilter.space)) return false;
+    if (billFilter.type && row.bill_type !== billFilter.type) return false;
+    return true;
+  })
+})
+
+const processedCheckoutData = computed(() => {
+  return checkoutData.value.filter(row => {
+    if (checkoutFilter.enterprise && !(row.enterprise_name || '').includes(checkoutFilter.enterprise)) return false;
+    if (checkoutFilter.contract_no && !(row.contract_no || '').includes(checkoutFilter.contract_no)) return false;
+    const spaceStr = (row.building_name || '') + (row.room_number || '');
+    if (checkoutFilter.space && !spaceStr.includes(checkoutFilter.space)) return false;
+    return true;
+  })
+})
+
+const processedMetersList = computed(() => {
+  return metersList.value.filter(row => {
+    if (meterFilter.enterprise && !(row.enterprise_name || '').includes(meterFilter.enterprise)) return false;
+    const spaceStr = (row.building_name || '') + (row.room_number || '');
+    if (meterFilter.space && !spaceStr.includes(meterFilter.space)) return false;
+    return true;
+  })
+})
+
+// ==========================
+// 数据拉取与路由匹配
+// ==========================
 const fetchBills = async () => {
   billLoading.value = true
   try {
     const res = await request.get('/api/finance/receivables/list')
-    if (res.code === 200) {
-      billData.value = res.data
-    }
+    if (res.code === 200) billData.value = res.data
   } finally { billLoading.value = false }
 }
 
@@ -287,9 +363,7 @@ const fetchCheckouts = async () => {
   checkoutLoading.value = true
   try {
     const res = await request.get('/api/finance/checkouts/list')
-    if (res.code === 200) {
-      checkoutData.value = res.data
-    }
+    if (res.code === 200) checkoutData.value = res.data
   } finally { checkoutLoading.value = false }
 }
 
@@ -306,6 +380,9 @@ const handleTabClick = (tab) => {
   if (tab.paneName === 'meters') fetchMeters()
 }
 
+// ==========================
+// 账单与打款逻辑
+// ==========================
 const reviewDialogVisible = ref(false)
 const currentReviewBill = ref({})
 const rejectReasonText = ref('') 
@@ -336,7 +413,6 @@ const handlePay = async (id, action) => {
     if (res.code === 200) {
       ElMessage.success(res.msg)
       reviewDialogVisible.value = false
-      router.replace({ path: '/finance', query: {} })
       fetchBills()
     } else { ElMessage.error(res.msg) }
   } catch (e) { ElMessage.error('核销通讯失败') }
@@ -348,9 +424,7 @@ const handleCheckoutPay = async (id) => {
     if (res.code === 200) {
       ElMessage.success(res.msg)
       fetchCheckouts()
-    } else {
-      ElMessage.error(res.msg)
-    }
+    } else { ElMessage.error(res.msg) }
   } catch (e) { ElMessage.error('核销通讯失败') }
 }
 
@@ -378,22 +452,15 @@ const meterFormRef = ref(null)
 const currentMeter = ref({})
 const meterForm = reactive({ space_id: '', enterprise_id: '', meter_type: 1, current_reading: 0, price: 0 })
 
-// 动态计算上次的底数和时间
-const lastMeterReading = computed(() => {
-  return meterForm.meter_type === 1 ? currentMeter.value.last_water : currentMeter.value.last_elec
-})
-const lastMeterDate = computed(() => {
-  return meterForm.meter_type === 1 ? currentMeter.value.last_water_date : currentMeter.value.last_elec_date
-})
+const lastMeterReading = computed(() => meterForm.meter_type === 1 ? currentMeter.value.last_water : currentMeter.value.last_elec)
+const lastMeterDate = computed(() => meterForm.meter_type === 1 ? currentMeter.value.last_water_date : currentMeter.value.last_elec_date)
 
 const calculatedUsage = computed(() => {
   const diff = Number(meterForm.current_reading) - Number(lastMeterReading.value)
   return diff > 0 ? Number(diff.toFixed(2)) : 0
 })
 
-const calculatedCost = computed(() => {
-  return (calculatedUsage.value * meterForm.price).toFixed(2)
-})
+const calculatedCost = computed(() => (calculatedUsage.value * meterForm.price).toFixed(2))
 
 const openMeterDialog = (row, type) => {
   currentMeter.value = row
@@ -421,12 +488,24 @@ const submitMeter = () => {
 }
 
 // ==========================
-// 历史流水抽屉相关逻辑
+// 抄表事件记录与账单追溯
 // ==========================
 const historyDrawerVisible = ref(false)
 const historyList = ref([])
 const historyLoading = ref(false)
 const currentHistoryType = ref(1)
+
+const processedHistoryList = computed(() => {
+  return historyList.value.map((item, index) => {
+    const prev = historyList.value[index + 1]
+    if (prev) {
+      const usage = (item.current_reading - prev.current_reading).toFixed(2)
+      return { ...item, is_latest: index === 0, last_reading: prev.current_reading, usage_amount: usage }
+    } else {
+      return { ...item, is_latest: index === 0, last_reading: '--', usage_amount: '初始底数建档' }
+    }
+  })
+})
 
 const openHistoryDrawer = async (row, type) => {
   currentMeter.value = row
@@ -449,15 +528,14 @@ const getBillTypeLabel = (type) => ({ 1: '场地租金', 2: '水费出账', 3: '
 const getBillTypeColor = (type) => ({ 1: 'primary', 2: 'info', 3: 'warning', 4: 'success', 5: 'danger', 6: 'info' }[type] || 'info')
 const getFullImgUrl = (url) => url.startsWith('http') ? url : `http://47.120.52.65:8787${url}`
 
-onMounted(() => {
-  fetchBills()
-})
+onMounted(() => { fetchBills() })
 </script>
 
 <style scoped>
 .finance-container { width: 100%; }
 .custom-tabs { box-shadow: none; border-radius: 4px; }
-.toolbar { margin-bottom: 20px; display: flex; gap: 10px; }
+.filter-label { font-size: 14px; font-weight: bold; color: #606266; margin-right: 5px;}
+.toolbar { margin-bottom: 20px; display: flex; gap: 10px; align-items: center;}
 .amount-text { font-weight: bold; color: #f56c6c; font-family: monospace; font-size: 14px; }
 .text-code { font-family: monospace; font-weight: bold; background: #f4f4f5; padding: 4px 8px; border-radius: 4px; color: #606266; }
 .text-danger { color: #f56c6c; }

@@ -2,30 +2,25 @@
   <el-container class="layout-container">
     <el-aside width="220px" class="aside">
       <div class="logo">高新科技产业园</div>
+      
       <el-menu :default-active="$route.path" router background-color="#2c3e50" text-color="#bfcbd9" active-text-color="#409EFF">
-        <el-menu-item index="/dashboard"><el-icon><Odometer /></el-icon><span>1. 运营数据指挥舱</span></el-menu-item>
-        <el-menu-item index="/system"><el-icon><Setting /></el-icon><span>2. 系统与权限控制</span></el-menu-item>
-        <el-menu-item index="/buildings"><el-icon><OfficeBuilding /></el-icon><span>3. 大厦与资产大盘</span></el-menu-item>
-        <el-menu-item index="/spaces"><el-icon><School /></el-icon><span>4. 房源资产精细库</span></el-menu-item>
-        <el-menu-item index="/vehicles"><el-icon><Van /></el-icon><span>5. 车位月卡与收费</span></el-menu-item>
-        <el-menu-item index="/leads"><el-icon><User /></el-icon><span>6. 招商与线索中心</span></el-menu-item>
-        <el-menu-item index="/enterprises"><el-icon><Memo /></el-icon><span>7. 企业户籍档案</span></el-menu-item>
-        <el-menu-item index="/contracts"><el-icon><Document /></el-icon><span>8. 租务与合同中心</span></el-menu-item>
-        <el-menu-item index="/finance"><el-icon><Money /></el-icon><span>9. 业财一体化中心</span></el-menu-item>
-        <el-menu-item index="/patrol"><el-icon><Aim /></el-icon><span>10. 智能安防巡检</span></el-menu-item>
-        <el-menu-item index="/services"><el-icon><Service /></el-icon><span>11. 基层服务人员管理</span></el-menu-item>
-        <el-menu-item index="/reports"><el-icon><DataLine /></el-icon><span>12. 报表与 BI 中心</span></el-menu-item>
-        <el-menu-item index="/inventory"><el-icon><Box /></el-icon><span>13. 后勤仓库与物料</span></el-menu-item>
+        <el-menu-item v-for="menu in menus" :key="menu.id" :index="menu.path">
+          <el-icon>
+            <component :is="iconMap[menu.icon] || 'Menu'" />
+          </el-icon>
+          <span>{{ menu.name }}</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
+    
     <el-container>
       <el-header class="header">
         <div class="header-left">
-          <span class="page-title">{{ $route.meta.title || '系统级全功能总线工作台' }}</span>
+          <span class="page-title">{{ $route.meta.title || 'SaaS 资产工作台' }}</span>
         </div>
         <div class="header-right">
           <el-icon style="margin-right: 8px;"><UserFilled /></el-icon>
-          <span class="user-info" style="margin-right: 20px;">{{ userInfo.real_name || '后台管理操作员' }}</span>
+          <span class="user-info" style="margin-right: 20px;">{{ userInfo.real_name || '操作员' }}</span>
           <el-button type="danger" link @click="handleLogout">
             <el-icon><SwitchButton /></el-icon> 退出登录
           </el-button>
@@ -40,18 +35,25 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElNotification } from 'element-plus'
+import { useRouter, useRoute } from 'vue-router'
+import { ElMessage, ElNotification } from 'element-plus'
 import { 
   Odometer, Setting, OfficeBuilding, School, Van, User, 
   Memo, Document, Money, Aim, Service, DataLine, Box, 
   UserFilled, SwitchButton 
-} from '@element-plus/icons-vue' // 确保引入了新图标 Box
+} from '@element-plus/icons-vue'
 import request from '../../utils/request'
 
 const router = useRouter()
+const route = useRoute()
 const userInfo = ref({})
 
+const iconMap = {
+  Odometer, Setting, OfficeBuilding, School, Van, User, 
+  Memo, Document, Money, Aim, Service, DataLine, Box
+}
+
+const menus = ref([])
 let pollTimer = null
 let notifInstance = null
 let lastPendingCount = 0
@@ -62,12 +64,34 @@ const handleLogout = () => {
   router.push('/login')
 }
 
-// 核心探测引擎
+const fetchDynamicMenus = async () => {
+  try {
+    const res = await request.get('/api/system/getMyMenus')
+    if (res.code === 200) {
+      menus.value = res.data
+      
+      // 【核心安全拦截引擎】：防越权访问
+      if (menus.value.length > 0) {
+        const currentPath = route.path
+        // 判断当前用户正在访问的路由，是否在他的授权菜单列表里
+        const hasPermission = menus.value.some(m => m.path === currentPath)
+        
+        if (!hasPermission) {
+          // 如果没有权限（比如被默认路由带到了 dashboard 但他没有这个权限）
+          // 强制重定向到他权限列表里的第一个页面！
+          router.replace(menus.value[0].path)
+        }
+      } else {
+        ElMessage.error('您的账号尚未分配任何系统模块权限，请联系管理员分配！')
+      }
+    }
+  } catch (e) {}
+}
+
 const checkGlobalNotifications = async () => {
   try {
     const res = await request.get('/api/finance/receivables/list', { timeout: 8000 })
     if (res.code === 200) {
-      // 核心修复：1. 拆除脆弱的本地鉴权死锁；2. 强制 Number 转换防御 PHP 弱类型字符串 "2"
       const pendingBills = res.data.filter(item => Number(item.is_paid) === 2)
       const pendingCount = pendingBills.length
 
@@ -84,15 +108,8 @@ const checkGlobalNotifications = async () => {
           customClass: 'clickable-notif',
           onClick: () => {
             const targetId = pendingBills[0].id
-            // 路由强穿透
-            router.push({
-              path: '/finance',
-              query: { review_bill_id: targetId, _t: Date.now() }
-            })
-            if (notifInstance) {
-              notifInstance.close()
-              notifInstance = null
-            }
+            router.push({ path: '/finance', query: { review_bill_id: targetId, _t: Date.now() } })
+            if (notifInstance) { notifInstance.close(); notifInstance = null }
           },
           onClose: () => { lastPendingCount = 0 }
         })
@@ -110,7 +127,7 @@ onMounted(() => {
   if (userStr) {
     userInfo.value = JSON.parse(userStr)
   }
-  // 去除各种拦截判断，只要挂载，立刻启动首次探测与心跳轮询
+  fetchDynamicMenus()
   checkGlobalNotifications()
   pollTimer = setInterval(checkGlobalNotifications, 15000)
 })
@@ -122,7 +139,6 @@ onUnmounted(() => {
 </script>
 
 <style>
-/* 强制注入全局交互样式 */
 .clickable-notif { cursor: pointer !important; transition: all 0.2s; }
 .clickable-notif:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; opacity: 0.95; }
 </style>

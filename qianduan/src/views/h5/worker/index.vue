@@ -6,7 +6,7 @@
           <h3 style="display: flex; align-items: center; gap: 8px;">
             {{ userInfo.real_name || '员工' }} 
             <el-tag size="small" type="warning" effect="dark" style="border-radius: 12px; border: none;">
-              {{ userInfo.position || '外勤人员' }}
+              {{ displayRoleType }}
             </el-tag>
           </h3>
           <p><el-icon><Iphone /></el-icon> 账号: {{ userInfo.username }}</p>
@@ -24,8 +24,7 @@
     </div>
 
     <div v-show="activeTab === 'orders'" class="h5-content">
-      
-      <div v-if="pendingReturns.length > 0" class="responsibility-card" style="border: 1px solid #faecd8; background-color: #fdf6ec; margin-top: -25px; margin-bottom: 15px; position: relative; z-index: 10;">
+      <div v-if="pendingReturns.length > 0 && !isSecurity" class="responsibility-card" style="border: 1px solid #faecd8; background-color: #fdf6ec; margin-top: -25px; margin-bottom: 15px; position: relative; z-index: 10;">
         <div class="resp-title" style="color: #e6a23c; margin-bottom: 12px;">
           <el-icon><Box /></el-icon> 待归还物资提醒 ({{ pendingReturns.length }} 件)
         </div>
@@ -42,17 +41,17 @@
         </div>
       </div>
 
-      <div class="responsibility-card" :style="{ marginTop: pendingReturns.length > 0 ? '0' : '-25px' }">
+      <div class="responsibility-card" :style="{ marginTop: (pendingReturns.length > 0 && !isSecurity) ? '0' : '-25px' }">
         <div class="resp-title"><el-icon><List /></el-icon> 我的岗位职责</div>
         <div class="resp-content">
-          {{ userInfo.responsibility || '系统暂未配置您的详细岗位职责。' }}
+          {{ userInfo.responsibility || '请严格按照中控室派发的工单规范作业。' }}
         </div>
       </div>
 
       <div class="stats-panel">
         <div class="stat-box">
           <div class="stat-num text-danger">{{ pendingOrders.length }}</div>
-          <div class="stat-label">中控室派单待办</div>
+          <div class="stat-label">中控派单待办</div>
         </div>
         <div class="stat-box">
           <div class="stat-num text-success">{{ completedOrders.length }}</div>
@@ -112,7 +111,7 @@
       </div>
     </div>
 
-    <div v-show="activeTab === 'inventory'" class="h5-content profile-wrapper" style="margin-top: -30px;">
+    <div v-if="!isSecurity" v-show="activeTab === 'inventory'" class="h5-content profile-wrapper" style="margin-top: -30px;">
       <div class="responsibility-card title-card" style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
         <span class="resp-title" style="margin:0;"><el-icon><Box /></el-icon> 我的后勤物资库</span>
         <el-tag size="small" type="primary" effect="light">{{ inventoryList.length }} 笔记录</el-tag>
@@ -145,7 +144,7 @@
         <div class="avatar"><el-icon><UserFilled /></el-icon></div>
         <div class="info">
           <div class="name">{{ userInfo.real_name }}</div>
-          <div class="position"><el-tag size="small" effect="dark" type="warning">{{ userInfo.position }}</el-tag></div>
+          <div class="position"><el-tag size="small" effect="dark" type="warning">{{ displayRoleType }}</el-tag></div>
         </div>
       </div>
       <div class="profile-menu">
@@ -162,8 +161,8 @@
       <div :class="['tab-item', { active: activeTab === 'orders' }]" @click="activeTab = 'orders'">
         <el-icon><List /></el-icon><span>工单大厅</span>
       </div>
-      <div :class="['tab-item', { active: activeTab === 'inventory' }]" @click="activeTab = 'inventory'">
-        <el-icon><Box /></el-icon><span>物资库</span>
+      <div v-if="!isSecurity" :class="['tab-item', { active: activeTab === 'inventory' }]" @click="activeTab = 'inventory'">
+        <el-icon><Box /></el-icon><span>物资领用</span>
       </div>
       <div :class="['tab-item', { active: activeTab === 'profile' }]" @click="activeTab = 'profile'">
         <el-icon><User /></el-icon><span>个人中心</span>
@@ -247,6 +246,17 @@ const pwdRules = {
   new_password: [{ required: true, message: '新密码必填', trigger: 'blur' }, { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }]
 }
 
+// 提取当前用户的角色身份
+const displayRoleType = computed(() => {
+  return userInfo.value.role_type || userInfo.value.position || '综合外勤'
+})
+
+// 判定是否是保安/巡逻人员
+const isSecurity = computed(() => {
+  const role = displayRoleType.value
+  return role.includes('安保') || role.includes('巡逻') || role.includes('保安')
+})
+
 const pendingOrders = computed(() => {
   if (!userInfo.value.id) return []
   return rawOrders.value.filter(o => o.status === 2 && o.handler_id === userInfo.value.id)
@@ -260,11 +270,12 @@ const pendingReturns = computed(() => {
   return inventoryList.value.filter(inv => inv.action_type === 3)
 })
 
+// 根据工种动态变换主页大按钮
 const actionMeta = computed(() => {
-  const pos = userInfo.value.position || ''
-  if (pos.includes('安保')) return { btnText: '防区安全巡检打卡', iconName: 'Aim', color: '#f56c6c' }
-  else if (pos.includes('保洁')) return { btnText: '卫生绿化清理打卡', iconName: 'Brush', color: '#67c23a' }
-  else if (pos.includes('维修') || pos.includes('工程')) return { btnText: '设备维保扫码打卡', iconName: 'Setting', color: '#e6a23c' }
+  const role = displayRoleType.value
+  if (role.includes('安保') || role.includes('巡逻')) return { btnText: '防区安全巡检打卡', iconName: 'Aim', color: '#f56c6c' }
+  else if (role.includes('保洁')) return { btnText: '卫生绿化清理打卡', iconName: 'Brush', color: '#67c23a' }
+  else if (role.includes('维修') || role.includes('工程')) return { btnText: '设备维保扫码打卡', iconName: 'Setting', color: '#e6a23c' }
   else return { btnText: '现场作业扫码', iconName: 'FullScreen', color: '#409eff' }
 })
 
@@ -283,6 +294,7 @@ const fetchWorkOrders = async () => {
 }
 
 const fetchInventory = async () => {
+  if (isSecurity.value) return // 重点：安保系统不拉取物资数据，节省请求
   try {
     const res = await request.get('/api/worker/inventory')
     if (res.code === 200) inventoryList.value = res.data

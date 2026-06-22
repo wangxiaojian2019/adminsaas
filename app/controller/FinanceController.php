@@ -12,7 +12,7 @@ class FinanceController
             ->leftJoin('enterprises', 'receivables.enterprise_id', '=', 'enterprises.id')
             ->leftJoin('spaces', 'receivables.space_id', '=', 'spaces.id')
             ->select('receivables.*', 'enterprises.name as enterprise_name', 'spaces.building_name', 'spaces.room_number')
-            // 【优化排序逻辑】：1=已结清沉底，未结清(0,2,3)浮顶，然后严格按最新出账时间(id倒序)排列
+            // 【优化排序逻辑】：严格按 "未结清浮顶，已结清沉底，再按最新生成时间排列"
             ->orderByRaw("CASE WHEN receivables.is_paid = 1 THEN 1 ELSE 0 END")
             ->orderBy('receivables.id', 'desc')
             ->get();
@@ -96,7 +96,10 @@ class FinanceController
     public function payCheckout(Request $request)
     {
         $id = $request->post('id');
-        Db::table('checkouts')->where('id', $id)->update(['status' => 1]);
+        Db::table('checkouts')->where('id', $id)->update([
+            'status' => 1,
+            'updated_at' => date('Y-m-d H:i:s')
+        ]);
         return json(['code' => 200, 'msg' => '退租清算单已彻底核销，流程完美闭环']);
     }
 
@@ -129,8 +132,7 @@ class FinanceController
         $meterType = $request->post('meter_type'); 
         $currentReading = floatval($request->post('current_reading'));
         
-        // 【允许前台动态传参计费单价】
-        $price = floatval($request->post('price', $meterType == 1 ? 5.5 : 1.2));
+        $price = floatval($request->post('price', $meterType == 1 ? 5.5 : 1.2)); 
 
         $lastMeter = Db::table('meters')->where('space_id', $spaceId)->where('meter_type', $meterType)->orderBy('id', 'desc')->first();
         $lastReading = $lastMeter ? floatval($lastMeter->current_reading) : 0;
@@ -145,6 +147,7 @@ class FinanceController
         }
 
         $amount = round($usage * $price, 2);
+        $currentTime = date('Y-m-d H:i:s');
 
         Db::beginTransaction();
         try {
@@ -153,7 +156,7 @@ class FinanceController
                 'meter_type' => $meterType,
                 'current_reading' => $currentReading,
                 'record_month' => date('Y-m'),
-                'created_at' => date('Y-m-d H:i:s')
+                'created_at' => $currentTime
             ]);
             
             Db::table('receivables')->insert([
@@ -163,7 +166,7 @@ class FinanceController
                 'amount' => $amount,
                 'due_date' => date('Y-m-d', strtotime('+7 days')), 
                 'is_paid' => 0,
-                'created_at' => date('Y-m-d H:i:s')
+                'created_at' => $currentTime
             ]);
 
             Db::table('notifications')->insert([
@@ -171,7 +174,7 @@ class FinanceController
                 'title' => '新账单出账提醒',
                 'content' => "您的能耗费账单(￥{$amount})已生成，请在截止日期前进入服务门户处理。",
                 'is_read' => 0,
-                'created_at' => date('Y-m-d H:i:s')
+                'created_at' => $currentTime
             ]);
 
             \app\process\Websocket::sendToEnterprise($entId, [
@@ -187,17 +190,39 @@ class FinanceController
         }
     }
 
-    // 【专门拉取对应房间的抄表历史事件】
+    // 【核心亮点】：时间戳同源快照算法，完美溯源账单推送流向
     public function meterHistory(Request $request)
     {
         $spaceId = $request->get('space_id');
         $meterType = $request->get('meter_type');
+        $billType = $meterType == 1 ? 2 : 3;
         
         $list = Db::table('meters')
             ->where('space_id', $spaceId)
             ->where('meter_type', $meterType)
             ->orderBy('id', 'desc')
             ->get();
+
+        foreach ($list as $item) {
+            // 利用时间戳找寻同一时刻（前后2秒内）系统触发的财务流水单
+            $timeStart = date('Y-m-d H:i:s', strtotime($item->created_at) - 2);
+            $timeEnd = date('Y-m-d H:i:s', strtotime($item->created_at) + 2);
+            
+            $bill = Db::table('receivables')
+                ->where('space_id', $spaceId)
+                ->where('bill_type', $billType)
+                ->whereBetween('created_at', [$timeStart, $timeEnd])
+                ->first();
+                
+            if ($bill) {
+                $ent = Db::table('enterprises')->where('id', $bill->enterprise_id)->first();
+                $item->billed_amount = $bill->amount;
+                $item->pushed_to = $ent ? $ent->name : '未知企业(或已销户)';
+            } else {
+                $item->billed_amount = 0;
+                $item->pushed_to = '';
+            }
+        }
             
         return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
