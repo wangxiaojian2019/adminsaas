@@ -2,7 +2,8 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
 const service = axios.create({
-    baseURL: 'http://47.120.52.65:8787', 
+    // 核心修改：不再写死 IP，改为动态读取环境变量中的 VITE_BASE_API
+    baseURL: import.meta.env.VITE_BASE_API, 
     timeout: 10000 
 })
 
