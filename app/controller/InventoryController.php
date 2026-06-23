@@ -6,152 +6,154 @@ use support\Db;
 
 class InventoryController
 {
-    public function list(Request $request)
+    /**
+     * 获取库存大盘及统计数据
+     */
+    public function stockList(Request $request)
     {
-        $list = Db::table('inventory_items')->orderBy('id', 'desc')->get();
-        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
-    }
+        $keyword = $request->get('keyword');
+        $category = $request->get('category');
 
-    public function add(Request $request)
-    {
-        $name = $request->post('name');
-        if (!$name) return json(['code' => 400, 'msg' => '物品名称不能为空']);
+        $query = Db::table('inventory_items');
+        if (!empty($keyword)) $query->where('name', 'like', "%{$keyword}%")->orWhere('sku_code', 'like', "%{$keyword}%");
+        if (!empty($category)) $query->where('category', $category);
 
-        $initialStock = intval($request->post('initial_stock', 0));
-        $safetyStock = intval($request->post('safety_stock', 0));
+        $list = $query->orderBy('id', 'desc')->get();
 
-        Db::beginTransaction();
-        try {
-            $itemId = Db::table('inventory_items')->insertGetId([
-                'name' => $name,
-                'category' => $request->post('category', 1),
-                'stock' => $initialStock,
-                'safety_stock' => $safetyStock,
-                'unit' => $request->post('unit', '个'),
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s')
-            ]);
-
-            if ($initialStock > 0) {
-                Db::table('inventory_records')->insert([
-                    'item_id' => $itemId,
-                    'action_type' => 1, 
-                    'quantity' => $initialStock,
-                    'related_person' => '系统初始建账',
-                    'expected_return_date' => null,
-                    'remark' => '系统期初建账录入',
-                    'created_at' => date('Y-m-d H:i:s')
-                ]);
-            }
-
-            Db::commit();
-            return json(['code' => 200, 'msg' => '物品建档成功']);
-        } catch (\Exception $e) {
-            Db::rollBack();
-            return json(['code' => 500, 'msg' => '建档异常：' . $e->getMessage()]);
+        // 统计面板：总货值与月度流水
+        $totalValue = 0;
+        $warningCount = 0;
+        foreach ($list as $item) {
+            $totalValue += ($item->qty * $item->avg_price);
+            if ($item->qty <= $item->min_stock) $warningCount++;
         }
+
+        $currentMonth = date('Y-m');
+        $monthCost = Db::table('inventory_logs')->where('type', 2)->where('created_at', 'like', "{$currentMonth}%")->sum('total_cost');
+        $monthInbound = Db::table('inventory_logs')->where('type', 1)->where('created_at', 'like', "{$currentMonth}%")->sum('total_cost');
+
+        return json([
+            'code' => 200, 
+            'msg' => 'success', 
+            'data' => $list,
+            'stats' => [
+                'totalValue' => round($totalValue, 2),
+                'warningCount' => $warningCount,
+                'monthCost' => $monthCost ?: 0,
+                'monthInbound' => $monthInbound ?: 0
+            ]
+        ]);
     }
 
-    public function action(Request $request)
+    /**
+     * 采购入库 (核心：移动加权平均成本算法)
+     */
+    public function inbound(Request $request)
     {
-        $itemId = $request->post('item_id');
-        $actionType = $request->post('action_type'); 
-        $quantity = intval($request->post('quantity', 1));
-        $relatedType = $request->post('related_type', 1);
-        $relatedPerson = $request->post('related_person', '');
-        $expectedReturnDate = $request->post('expected_return_date', null);
-        $remark = $request->post('remark', '');
+        $skuId = $request->post('sku_id');
+        $qty = intval($request->post('qty'));
+        $price = floatval($request->post('price')); // 本次采购单价
 
-        if ($quantity <= 0) return json(['code' => 400, 'msg' => '操作数量必须大于0']);
+        if (!$skuId || $qty <= 0 || $price <= 0) {
+            return json(['code' => 400, 'msg' => '入库参数错误']);
+        }
 
         Db::beginTransaction();
         try {
-            $item = Db::table('inventory_items')->where('id', $itemId)->lockForUpdate()->first();
-            if (!$item) {
-                return json(['code' => 404, 'msg' => '物品不存在']);
-            }
+            $item = Db::table('inventory_items')->where('id', $skuId)->lockForUpdate()->first();
+            if (!$item) throw new \Exception('物料不存在');
 
-            $newStock = $item->stock;
+            // 核心算法：新加权平均价 = (旧库存*旧均价 + 新数量*新单价) / (旧库存 + 新数量)
+            $oldTotal = $item->qty * $item->avg_price;
+            $newTotal = $qty * $price;
+            $newAvgPrice = ($oldTotal + $newTotal) / ($item->qty + $qty);
 
-            // 资产/流转流向分拣：1-采购入库, 4-归还, 5-盘盈入账
-            if ($actionType == 1 || $actionType == 4 || $actionType == 5) {
-                $newStock += $quantity;
-            // 2-领用/消耗, 3-借出, 6-盘亏流出
-            } else if ($actionType == 2 || $actionType == 3 || $actionType == 6) {
-                if ($item->stock < $quantity) {
-                    Db::rollBack();
-                    return json(['code' => 400, 'msg' => "库存不足，当前仅剩 {$item->stock} {$item->unit}"]);
-                }
-                $newStock -= $quantity;
-            } else {
-                return json(['code' => 400, 'msg' => '未知的操作指令']);
-            }
-
-            Db::table('inventory_items')->where('id', $itemId)->update([
-                'stock' => $newStock,
+            // 更新库存和均价
+            Db::table('inventory_items')->where('id', $skuId)->update([
+                'qty' => $item->qty + $qty,
+                'avg_price' => round($newAvgPrice, 2),
                 'updated_at' => date('Y-m-d H:i:s')
             ]);
 
-            Db::table('inventory_records')->insert([
-                'item_id' => $itemId,
-                'action_type' => $actionType,
-                'quantity' => $quantity,
-                'related_person' => $relatedPerson ?: '系统自动审计',
-                'expected_return_date' => $actionType == 3 ? $expectedReturnDate : null,
-                'remark' => $remark,
+            // 写入流水
+            Db::table('inventory_logs')->insert([
+                'type' => 1,
+                'sku_id' => $skuId,
+                'qty' => $qty,
+                'price' => $price,
+                'total_cost' => round($newTotal, 2),
                 'created_at' => date('Y-m-d H:i:s')
             ]);
 
-            // 双端消息分发引擎 (仅常规业务分发，5-盘盈、6-盘亏属于内部审计动作，不触达外部)
-            if ($actionType == 2 || $actionType == 3) {
-                $actionName = $actionType == 3 ? '出借' : '发放';
-                $returnTips = ($actionType == 3 && $expectedReturnDate) ? " 请注意于 {$expectedReturnDate} 前完好交还至库房。" : "";
-                
-                if ($relatedType == 2) {
-                    // 推送给租户企业
-                    $entName = str_replace(['[企业] ', '[企业主体] '], '', $relatedPerson);
-                    $ent = Db::table('enterprises')->where('name', trim($entName))->first();
-                    if ($ent) {
-                        Db::table('notifications')->insert([
-                            'enterprise_id' => $ent->id,
-                            'title' => "仓库物资{$actionName}通知",
-                            'content' => "园区后勤向您{$actionName}了 {$quantity} {$item->unit} 【{$item->name}】。{$returnTips}如有疑问请联系物业中心。",
-                            'is_read' => 0,
-                            'created_at' => date('Y-m-d H:i:s')
-                        ]);
-                    }
-                } else if ($relatedType == 1) {
-                    // 推送给内部外勤员工
-                    $staffName = str_replace(['[员工] ', '[领用师傅] '], '', $relatedPerson);
-                    $staff = Db::table('admins')->where('real_name', trim($staffName))->orWhere('username', trim($staffName))->first();
-                    if ($staff) {
-                        Db::table('worker_notifications')->insert([
-                            'worker_id' => $staff->id,
-                            'title' => "物资{$actionName}入账提醒",
-                            'content' => "您已从仓库成功登记{$actionName} {$quantity} {$item->unit} 【{$item->name}】。{$returnTips}",
-                            'is_read' => 0,
-                            'created_at' => date('Y-m-d H:i:s')
-                        ]);
-                    }
-                }
-            }
-
             Db::commit();
-            return json(['code' => 200, 'msg' => '库存操作成功，台账与消息均已联动']);
+            return json(['code' => 200, 'msg' => "入库成功，已将成本均价重置为￥" . round($newAvgPrice, 2)]);
         } catch (\Exception $e) {
             Db::rollBack();
-            return json(['code' => 500, 'msg' => '库存引擎并发流转异常']);
+            return json(['code' => 500, 'msg' => $e->getMessage()]);
         }
     }
 
-    public function records(Request $request)
+    /**
+     * 工单领料出库 (联动工单系统)
+     */
+    public function outbound(Request $request)
     {
-        $itemId = $request->get('item_id');
-        $records = Db::table('inventory_records')
-            ->where('item_id', $itemId)
-            ->orderBy('id', 'desc')
+        $skuId = $request->post('sku_id');
+        $qty = intval($request->post('qty'));
+        $workOrderNo = $request->post('work_order_no');
+        $worker = $request->post('worker');
+
+        if (!$skuId || $qty <= 0 || !$workOrderNo) {
+            return json(['code' => 400, 'msg' => '出库参数错误或未关联工单']);
+        }
+
+        Db::beginTransaction();
+        try {
+            $item = Db::table('inventory_items')->where('id', $skuId)->lockForUpdate()->first();
+            if ($item->qty < $qty) throw new \Exception("可用库存不足，仅剩 {$item->qty}");
+
+            // 按照当前加权均价核算成本
+            $totalCost = $qty * $item->avg_price;
+
+            // 扣减库存
+            Db::table('inventory_items')->where('id', $skuId)->update([
+                'qty' => $item->qty - $qty,
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+
+            // 写入领料流水
+            Db::table('inventory_logs')->insert([
+                'type' => 2,
+                'sku_id' => $skuId,
+                'qty' => $qty,
+                'price' => $item->avg_price,
+                'total_cost' => round($totalCost, 2),
+                'work_order_no' => $workOrderNo,
+                'worker' => $worker,
+                'created_at' => date('Y-m-d H:i:s')
+            ]);
+
+            // TODO: 后续可在此处联动工单表(work_orders)，将 $totalCost 写入工单的 material_cost 字段
+
+            Db::commit();
+            return json(['code' => 200, 'msg' => "领料成功！扣减成本￥" . round($totalCost, 2) . "，已挂载至工单{$workOrderNo}"]);
+        } catch (\Exception $e) {
+            Db::rollBack();
+            return json(['code' => 500, 'msg' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * 获取出库流水
+     */
+    public function outLogs(Request $request)
+    {
+        $logs = Db::table('inventory_logs')
+            ->join('inventory_items', 'inventory_logs.sku_id', '=', 'inventory_items.id')
+            ->where('inventory_logs.type', 2)
+            ->select('inventory_logs.*', 'inventory_items.name as material_name')
+            ->orderBy('inventory_logs.id', 'desc')
             ->get();
-            
-        return json(['code' => 200, 'msg' => 'success', 'data' => $records]);
+        return json(['code' => 200, 'msg' => 'success', 'data' => $logs]);
     }
 }

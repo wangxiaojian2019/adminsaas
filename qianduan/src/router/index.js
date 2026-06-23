@@ -25,7 +25,12 @@ const routes = [
       { path: 'services', name: 'Services', component: () => import('../views/services/index.vue'), meta: { title: '基层服务人员管理' } },
       { path: 'workOrder', name: 'WorkOrder', component: () => import('../views/workOrder/index.vue'), meta: { title: '外勤工单大盘' } },
       { path: 'reports', name: 'Reports', component: () => import('../views/reports/index.vue'), meta: { title: '报表与 BI 中心' } },
-      { path: 'inventory', name: 'Inventory', component: () => import('../views/inventory/index.vue'), meta: { title: '仓库与物料' } }
+      { path: 'inventory', name: 'Inventory', component: () => import('../views/inventory/index.vue'), meta: { title: '仓库与物料' } },
+      { path: 'fee-config', name: 'FeeConfig', component: () => import('../views/fee-config/index.vue'), meta: { title: '计费策略配置' } },
+      { path: 'iot', name: 'Iot', component: () => import('../views/iot/index.vue'), meta: { title: 'IoT智能网联中心' } },
+      { path: 'decoration', name: 'Decoration', component: () => import('../views/decoration/index.vue'), meta: { title: '装修报备与工期管理' } },
+      // 👇 新增的：会议室预订与审批模块
+      { path: 'meeting', name: 'Meeting', component: () => import('../views/meeting/index.vue'), meta: { title: '共享会议室预订中心' } }
     ]
   }
 ]
@@ -36,19 +41,16 @@ router.beforeEach((to, from) => {
   document.title = to.meta.title ? `${to.meta.title} - 智慧园区SaaS` : '智慧园区SaaS'
   const path = to.path
 
-  // 1. 租户端移动门户防线
   if (path.startsWith('/h5/tenant')) {
     const tenantToken = localStorage.getItem('h5_tenant_token')
     if (path !== '/h5/tenant/login' && !tenantToken) return '/h5/tenant/login'
     if (path === '/h5/tenant/login' && tenantToken) return '/h5/tenant/index'
   } 
-  // 2. 基层外勤端作业防线
   else if (path.startsWith('/h5/worker') || path === '/h5/login') {
     const workerToken = localStorage.getItem('h5_worker_token')
     if (path !== '/h5/login' && !workerToken) return '/h5/login'
     if (path === '/h5/login' && workerToken) return '/h5/worker'
   } 
-  // 3. PC 运营大盘核心防线
   else {
     const saasToken = localStorage.getItem('saas_token')
     if (path !== '/login' && !saasToken) return '/login'

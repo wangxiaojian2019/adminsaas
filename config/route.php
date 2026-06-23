@@ -131,11 +131,40 @@ Route::group('/api', function () {
     Route::get('/notification/list', [app\controller\NotificationController::class, 'list']);
     Route::post('/notification/read', [app\controller\NotificationController::class, 'read']);
 
-    // 物资库存
+    // =================================================================
+    // ↓ 完美嵌入的新增高阶业务模块 (含装修、进销存、会议室、计费、IoT) ↓
+    // =================================================================
+
+    // 1. 装修报备与工期流转系统
+    Route::get('/v1/decoration/list', [app\controller\DecorationController::class, 'list']);
+    Route::post('/v1/decoration/apply', [app\controller\DecorationController::class, 'apply']);
+    Route::post('/v1/decoration/audit', [app\controller\DecorationController::class, 'audit']);
+    Route::post('/v1/decoration/delay', [app\controller\DecorationController::class, 'applyDelay']);
+
+    // 2. 仓库与进销存管理系统 (保留了您的旧版路由防止报错，并新增v1高阶接口)
     Route::get('/inventory/list', [app\controller\InventoryController::class, 'list']);
     Route::post('/inventory/add', [app\controller\InventoryController::class, 'add']);
     Route::post('/inventory/action', [app\controller\InventoryController::class, 'action']);
     Route::get('/inventory/records', [app\controller\InventoryController::class, 'records']);
+    
+    Route::get('/v1/inventory/list', [app\controller\InventoryController::class, 'stockList']);
+    Route::get('/v1/inventory/logs', [app\controller\InventoryController::class, 'outLogs']);
+    Route::post('/v1/inventory/inbound', [app\controller\InventoryController::class, 'inbound']);
+    Route::post('/v1/inventory/outbound', [app\controller\InventoryController::class, 'outbound']);
+
+    // 3. 共享会议室与防冲突预订系统
+    Route::get('/v1/meeting/rooms', [app\controller\MeetingController::class, 'roomList']);
+    Route::get('/v1/meeting/list', [app\controller\MeetingController::class, 'bookingList']);
+    Route::post('/v1/meeting/apply', [app\controller\MeetingController::class, 'apply']);
+    Route::post('/v1/meeting/audit', [app\controller\MeetingController::class, 'audit']);
+
+    // 4. 计费策略配置
+    Route::get('/v1/fee-config/get', [app\controller\FeeConfigController::class, 'get']);
+    Route::post('/v1/fee-config/save', [app\controller\FeeConfigController::class, 'save']);
+    
+    // 5. IoT 智能网联中心
+    Route::get('/v1/iot/list', [app\controller\IotController::class, 'list']);
+    Route::post('/v1/iot/control', [app\controller\IotController::class, 'control']);
 
 })->middleware([
     app\middleware\AuthMiddleware::class

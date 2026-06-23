@@ -195,6 +195,40 @@ INSERT INTO `contracts` VALUES (1,1,0,0,'HT20260611001',1,1,'2026-01-15','2026-0
 UNLOCK TABLES;
 
 --
+-- Table structure for table `decorations`
+--
+
+DROP TABLE IF EXISTS `decorations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `decorations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `apply_no` varchar(50) NOT NULL COMMENT '报备单号',
+  `enterprise_name` varchar(100) NOT NULL COMMENT '申请企业',
+  `room_info` varchar(100) NOT NULL COMMENT '施工房源',
+  `start_date` date NOT NULL COMMENT '进场日期',
+  `end_date` date NOT NULL COMMENT '预计完工日期',
+  `total_days` int(11) NOT NULL COMMENT '核准工期天数',
+  `status` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0待审核 1施工中 2延期审核 3已完工 4已驳回',
+  `deposit` decimal(10,2) NOT NULL DEFAULT '0.00' COMMENT '应缴押金',
+  `manager` varchar(50) DEFAULT NULL COMMENT '现场负责人',
+  `delay_reason` text COMMENT '二次延期说明',
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='装修报备工期管理表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `decorations`
+--
+
+LOCK TABLES `decorations` WRITE;
+/*!40000 ALTER TABLE `decorations` DISABLE KEYS */;
+/*!40000 ALTER TABLE `decorations` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `departments`
 --
 
@@ -326,16 +360,18 @@ DROP TABLE IF EXISTS `inventory_items`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `inventory_items` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `tenant_id` int(11) NOT NULL DEFAULT '1' COMMENT '租户ID',
-  `name` varchar(100) NOT NULL COMMENT '物品名称',
-  `category` tinyint(1) DEFAULT '1' COMMENT '1-易耗品(灯管/滤网) 2-固定资产(电钻/人字梯)',
-  `stock` int(11) DEFAULT '0' COMMENT '当前库存量',
-  `safety_stock` int(11) DEFAULT '0' COMMENT '安全库存下限预警值',
-  `unit` varchar(20) DEFAULT '个' COMMENT '计量单位',
+  `sku_code` varchar(50) NOT NULL COMMENT '物料编码',
+  `name` varchar(100) NOT NULL COMMENT '物料名称',
+  `category` varchar(50) DEFAULT NULL COMMENT '分类',
+  `qty` int(11) NOT NULL DEFAULT '0' COMMENT '当前结余库存',
+  `unit` varchar(20) NOT NULL COMMENT '单位',
+  `avg_price` decimal(10,2) NOT NULL DEFAULT '0.00' COMMENT '加权平均单价(动态计算)',
+  `min_stock` int(11) NOT NULL DEFAULT '10' COMMENT '安全预警阈值',
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COMMENT='仓库物品字典库';
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_sku` (`sku_code`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COMMENT='升级版库存资产台账表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -344,8 +380,38 @@ CREATE TABLE `inventory_items` (
 
 LOCK TABLES `inventory_items` WRITE;
 /*!40000 ALTER TABLE `inventory_items` DISABLE KEYS */;
-INSERT INTO `inventory_items` VALUES (1,1,'扶梯',2,8,3,'个','2026-06-21 11:21:32','2026-06-21 15:18:08'),(2,1,'拖把',1,7,5,'个','2026-06-21 11:26:00','2026-06-21 15:26:28');
+INSERT INTO `inventory_items` VALUES (1,'WL-001','LED长条平板灯','照明五金',45,'套',22.50,10,'2026-06-23 18:54:47',NULL),(2,'WL-002','加厚防水生料带','水暖管材',8,'卷',1.20,20,'2026-06-23 18:54:47',NULL),(3,'WL-003','A4打印纸(500张)','办公耗材',15,'包',18.00,10,'2026-06-23 18:54:47',NULL);
 /*!40000 ALTER TABLE `inventory_items` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `inventory_logs`
+--
+
+DROP TABLE IF EXISTS `inventory_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `inventory_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `type` tinyint(1) NOT NULL COMMENT '1:采购入库 2:工单领料出库',
+  `sku_id` int(11) NOT NULL,
+  `qty` int(11) NOT NULL COMMENT '变动数量',
+  `price` decimal(10,2) NOT NULL COMMENT '当时核算的单价',
+  `total_cost` decimal(10,2) NOT NULL COMMENT '总成本/货值',
+  `work_order_no` varchar(50) DEFAULT NULL COMMENT '关联工单号',
+  `worker` varchar(50) DEFAULT NULL COMMENT '领料人',
+  `created_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='出入库流水核销表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `inventory_logs`
+--
+
+LOCK TABLES `inventory_logs` WRITE;
+/*!40000 ALTER TABLE `inventory_logs` DISABLE KEYS */;
+/*!40000 ALTER TABLE `inventory_logs` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -400,7 +466,7 @@ CREATE TABLE `iot_devices` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_device_sn` (`device_sn`),
   KEY `idx_tenant_space` (`tenant_id`,`space_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IoT 智能网联设备台账表';
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COMMENT='IoT 智能网联设备台账表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -409,6 +475,7 @@ CREATE TABLE `iot_devices` (
 
 LOCK TABLES `iot_devices` WRITE;
 /*!40000 ALTER TABLE `iot_devices` DISABLE KEYS */;
+INSERT INTO `iot_devices` VALUES (1,1,1,'MAC-00-1A-2B-3C-4D-5E',1,'正泰智能电表',1,NULL,NULL,'2026-06-23 19:02:13'),(2,1,1,'MAC-00-1A-2B-3C-4D-5F',2,'海康智能水表',1,NULL,NULL,'2026-06-23 19:02:13'),(3,1,2,'MAC-A1-B2-C3-D4-E5-F6',3,'大华闸机门禁',0,NULL,NULL,'2026-06-23 19:02:13'),(4,1,3,'MAC-FF-EE-DD-CC-BB-AA',1,'正泰智能电表',2,NULL,NULL,'2026-06-23 19:02:13');
 /*!40000 ALTER TABLE `iot_devices` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -481,6 +548,70 @@ LOCK TABLES `leads` WRITE;
 /*!40000 ALTER TABLE `leads` DISABLE KEYS */;
 INSERT INTO `leads` VALUES (1,1,'大疆创新设备','采购部','15911112221',500.00,'线上获客',1,'2026-05-12 14:20:00','智能制造','91440300MA5EXXX001',0,0,NULL,1,NULL,0,NULL),(2,1,'元气森林研发','行政部','15911112222',300.00,'渠道中介',2,'2026-05-15 10:00:00','快消品','91440300MA5EXXX002',0,0,NULL,1,NULL,0,NULL),(101,1,'星动科技有限公司','马总','13800001111',500.00,'1',1,'2026-06-09 21:49:39',NULL,NULL,0,0,NULL,1,NULL,2,'2026-06-13 21:49:39'),(102,1,'云端创想文化传媒','林总监','13900002222',150.00,'2',1,'2026-05-25 21:49:39',NULL,NULL,0,0,NULL,1,NULL,2,'2026-06-01 21:49:39'),(103,1,'雷霆跨境电商贸易','陈经理','13700003333',300.00,'3',1,'2026-05-15 21:49:39',NULL,NULL,0,0,NULL,1,NULL,2,'2026-05-27 21:49:39'),(104,1,'极客时代软件研发','张工','13600004444',1000.00,'4',1,'2026-06-13 21:49:39',NULL,NULL,0,0,NULL,1,'2026-06-22 15:57:11',104,'2026-06-15 21:10:14'),(105,1,'绿洲生态农业发展','刘董','13500005555',800.00,'1',1,'2026-06-04 21:49:39',NULL,NULL,0,0,NULL,1,NULL,3,'2026-06-12 21:49:39');
 /*!40000 ALTER TABLE `leads` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `meeting_bookings`
+--
+
+DROP TABLE IF EXISTS `meeting_bookings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `meeting_bookings` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `booking_no` varchar(50) NOT NULL,
+  `enterprise_name` varchar(100) NOT NULL,
+  `room_id` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `start_time` time NOT NULL,
+  `end_time` time NOT NULL,
+  `duration` decimal(4,1) NOT NULL,
+  `cost` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `topic` varchar(200) DEFAULT NULL,
+  `status` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会议室预订防冲突表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `meeting_bookings`
+--
+
+LOCK TABLES `meeting_bookings` WRITE;
+/*!40000 ALTER TABLE `meeting_bookings` DISABLE KEYS */;
+/*!40000 ALTER TABLE `meeting_bookings` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `meeting_rooms`
+--
+
+DROP TABLE IF EXISTS `meeting_rooms`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `meeting_rooms` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `capacity` int(11) NOT NULL,
+  `price_per_hour` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `has_projector` tinyint(1) DEFAULT '0',
+  `has_whiteboard` tinyint(1) DEFAULT '0',
+  `has_video_conf` tinyint(1) DEFAULT '0',
+  `status` varchar(20) DEFAULT 'idle',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COMMENT='会议室资产物理表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `meeting_rooms`
+--
+
+LOCK TABLES `meeting_rooms` WRITE;
+/*!40000 ALTER TABLE `meeting_rooms` DISABLE KEYS */;
+INSERT INTO `meeting_rooms` VALUES (1,'V01 极客董事局',20,200.00,1,1,1,'idle'),(2,'M02 创客洽谈室',8,50.00,0,1,0,'idle'),(3,'M03 敏捷作战室',12,100.00,1,1,0,'idle');
+/*!40000 ALTER TABLE `meeting_rooms` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -648,7 +779,7 @@ CREATE TABLE `permissions` (
   `icon` varchar(50) DEFAULT NULL COMMENT '前端图标组件名',
   `sort` int(11) DEFAULT '0' COMMENT '排序权重',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -657,7 +788,7 @@ CREATE TABLE `permissions` (
 
 LOCK TABLES `permissions` WRITE;
 /*!40000 ALTER TABLE `permissions` DISABLE KEYS */;
-INSERT INTO `permissions` VALUES (1,0,'运营数据指挥舱',1,'/dashboard','Odometer',10),(2,0,'大厦与资产大盘',1,'/buildings','OfficeBuilding',20),(3,0,'房源资产精细库',1,'/spaces','School',30),(4,0,'车位月卡与收费',1,'/vehicles','Van',40),(5,0,'招商与线索中心',1,'/leads','User',50),(6,0,'企业户籍档案',1,'/enterprises','Memo',60),(7,0,'租务与合同中心',1,'/contracts','Document',70),(8,0,'业财一体化中心',1,'/finance','Money',80),(9,0,'智能安防巡检',1,'/patrol','Aim',90),(10,0,'基层服务人员管理',1,'/services','Service',100),(11,0,'报表与 BI 中心',1,'/reports','DataLine',110),(12,0,'系统与权限控制',1,'/system','Setting',999),(13,0,'仓库与物料',1,'/inventory','Box',120),(14,0,'外勤工单大盘',1,'/workOrder','Document',130),(15,0,'IoT 智能网联中心',1,'/iot','Cpu',95),(16,0,'计费策略配置',1,'/fee-config','Calculator',85);
+INSERT INTO `permissions` VALUES (1,0,'运营数据指挥舱',1,'/dashboard','Odometer',10),(2,0,'大厦与资产大盘',1,'/buildings','OfficeBuilding',20),(3,0,'房源资产精细库',1,'/spaces','School',30),(4,0,'车位月卡与收费',1,'/vehicles','Van',40),(5,0,'招商与线索中心',1,'/leads','User',50),(6,0,'企业户籍档案',1,'/enterprises','Memo',60),(7,0,'租务与合同中心',1,'/contracts','Document',70),(8,0,'业财一体化中心',1,'/finance','Money',80),(9,0,'智能安防巡检',1,'/patrol','Aim',90),(10,0,'基层服务人员管理',1,'/services','Service',100),(11,0,'报表与 BI 中心',1,'/reports','DataLine',110),(12,0,'系统与权限控制',1,'/system','Setting',999),(13,0,'仓库与物料',1,'/inventory','Box',120),(14,0,'外勤工单大盘',1,'/workOrder','Document',130),(15,0,'IoT 智能网联中心',1,'/iot','Cpu',95),(16,0,'计费策略配置',1,'/fee-config','Calculator',85),(17,0,'装修报备管理',1,'/decoration','Tools',135),(18,0,'共享会议室管网',1,'/meeting','Calendar',136);
 /*!40000 ALTER TABLE `permissions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -717,7 +848,7 @@ CREATE TABLE `role_permissions` (
 
 LOCK TABLES `role_permissions` WRITE;
 /*!40000 ALTER TABLE `role_permissions` DISABLE KEYS */;
-INSERT INTO `role_permissions` VALUES (1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(1,8),(1,9),(1,10),(1,11),(1,12),(1,13),(1,14),(2,1),(2,2),(2,3),(2,5),(2,6),(3,1),(3,6),(3,7),(3,8),(3,11),(6,2),(6,5),(7,5);
+INSERT INTO `role_permissions` VALUES (1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(1,8),(1,9),(1,10),(1,11),(1,12),(1,13),(1,14),(1,15),(1,16),(1,17),(1,18),(2,1),(2,2),(2,3),(2,5),(2,6),(3,1),(3,6),(3,7),(3,8),(3,11),(6,2),(6,5),(7,5);
 /*!40000 ALTER TABLE `role_permissions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -745,7 +876,7 @@ CREATE TABLE `roles` (
 
 LOCK TABLES `roles` WRITE;
 /*!40000 ALTER TABLE `roles` DISABLE KEYS */;
-INSERT INTO `roles` VALUES (1,1,'超级管理员',3,'2026-06-10 15:20:37','1,2,3,4,5,6,7,8,9,10,11,12'),(2,1,'招商主管',2,'2026-06-10 15:20:37',NULL),(3,1,'财务专员',3,'2026-06-10 15:20:37',NULL),(4,1,'工程维修',1,'2026-06-10 15:20:37',NULL),(5,1,'总经理',3,'2026-06-10 23:06:34',NULL),(6,1,'招商业务员',1,'2026-06-14 21:58:45','2,5'),(7,1,'招商主管',2,'2026-06-14 21:59:07',NULL);
+INSERT INTO `roles` VALUES (1,1,'超级管理员',3,'2026-06-10 15:20:37','1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18'),(2,1,'招商主管',2,'2026-06-10 15:20:37',NULL),(3,1,'财务专员',3,'2026-06-10 15:20:37',NULL),(4,1,'工程维修',1,'2026-06-10 15:20:37',NULL),(5,1,'总经理',3,'2026-06-10 23:06:34',NULL),(6,1,'招商业务员',1,'2026-06-14 21:58:45','2,5'),(7,1,'招商主管',2,'2026-06-14 21:59:07',NULL);
 /*!40000 ALTER TABLE `roles` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -781,6 +912,34 @@ LOCK TABLES `spaces` WRITE;
 /*!40000 ALTER TABLE `spaces` DISABLE KEYS */;
 INSERT INTO `spaces` VALUES (1,1,'京东大厦',1,'101',150.00,0.00,0.00,1,'拓普检测技术有限公司','2026-01-05 10:00:00'),(2,1,'京东大厦',1,'102',120.00,0.00,0.00,1,'华为技术有限公司','2026-01-05 10:00:00'),(3,1,'京东大厦',1,'103',158.00,0.00,0.00,0,NULL,'2026-01-05 10:00:00'),(4,1,'京东大厦',2,'201',158.00,0.00,0.00,0,NULL,'2026-01-05 10:00:00'),(5,1,'京东大厦',2,'202',1200.00,0.00,0.00,2,NULL,'2026-01-05 10:00:00'),(6,1,'腾讯大厦',1,'101',310.00,0.00,0.00,1,'美团科技有限公司','2026-01-05 10:00:00'),(7,1,'腾讯大厦',1,'102',180.00,0.00,0.00,1,'百度在线网络技术','2026-01-05 10:00:00'),(12,1,'测试',3,'302',158.00,0.00,0.00,0,NULL,'2026-06-20 00:11:44'),(13,1,'拓普大厦',1,'101',500.00,0.00,0.00,0,NULL,'2026-06-20 00:16:14'),(15,1,'拓普大厦',2,'202',2000.00,0.00,0.00,0,NULL,'2026-06-20 00:16:58'),(16,1,'拓普大厦',1,'102',1500.00,0.00,0.00,0,NULL,'2026-06-20 00:17:21'),(19,1,'拓普大厦',3,'301',2000.00,0.00,0.00,3,NULL,'2026-06-20 00:17:56'),(20,1,'拓普大厦',4,'401',200.00,0.00,0.00,2,NULL,'2026-06-20 00:18:08'),(21,1,'拓普大厦',4,'402',300.00,0.00,0.00,3,NULL,'2026-06-20 00:18:19'),(22,1,'拓普大厦',4,'403',400.00,0.00,0.00,0,NULL,'2026-06-20 00:18:32'),(23,1,'拓普大厦',4,'408',550.00,0.00,0.00,0,NULL,'2026-06-20 00:18:44'),(24,1,'拓普大厦',4,'405',550.00,0.00,0.00,0,NULL,'2026-06-20 00:19:00'),(25,1,'拓普大厦',5,'523',2000.00,0.00,0.00,0,NULL,'2026-06-20 00:28:19'),(26,1,'甬城公寓',1,'102',300.00,0.00,0.00,0,NULL,'2026-06-20 00:39:38'),(27,1,'甬城公寓',2,'2001',50.00,0.00,0.00,0,NULL,'2026-06-20 00:40:33'),(28,1,'甬城公寓',2,'2002',50.00,0.00,0.00,0,NULL,'2026-06-20 00:40:55'),(29,1,'甬城公寓',2,'2003',50.00,0.00,0.00,0,NULL,'2026-06-20 00:41:13'),(30,1,'甬城公寓',2,'2004',50.00,0.00,0.00,0,NULL,'2026-06-20 00:41:24'),(31,1,'甬城公寓',2,'2005',50.00,0.00,0.00,0,NULL,'2026-06-20 00:42:22'),(32,1,'甬城公寓',2,'2006',50.00,0.00,0.00,3,NULL,'2026-06-20 00:42:32'),(33,1,'甬城公寓',2,'2007',50.00,0.00,0.00,2,NULL,'2026-06-20 00:42:44'),(34,1,'甬城公寓',2,'2008',50.00,0.00,0.00,1,'张三','2026-06-20 00:42:58'),(35,1,'甬城公寓',2,'2009',50.00,0.00,0.00,0,NULL,'2026-06-20 00:43:07'),(36,1,'甬城公寓',2,'2010',50.00,0.00,0.00,1,'拓普检测技术有限公司','2026-06-20 00:43:18'),(37,1,'甬城公寓',2,'2011',50.00,0.00,0.00,0,NULL,'2026-06-20 00:43:30'),(38,1,'甬城公寓',1,'101',1700.00,0.00,0.00,1,'哆啦A梦有限公司','2026-06-20 00:43:57');
 /*!40000 ALTER TABLE `spaces` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `system_configs`
+--
+
+DROP TABLE IF EXISTS `system_configs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `system_configs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `config_key` varchar(50) NOT NULL,
+  `config_value` text,
+  `remark` varchar(100) DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_key` (`config_key`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COMMENT='全局系统配置表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `system_configs`
+--
+
+LOCK TABLES `system_configs` WRITE;
+/*!40000 ALTER TABLE `system_configs` DISABLE KEYS */;
+INSERT INTO `system_configs` VALUES (1,'fee_config','{\"waterPrice\":5.5,\"electricityPrice\":1.2,\"billMode\":\"fixed\",\"lateFeeRate\":0.1,\"autoCutoff\":true}','计费策略全局配置','2026-06-23 19:15:08');
+/*!40000 ALTER TABLE `system_configs` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -891,4 +1050,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-23 15:58:39
+-- Dump completed on 2026-06-23 19:21:44

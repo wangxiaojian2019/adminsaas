@@ -1,156 +1,154 @@
 <template>
-  <el-container class="layout-container">
-    <el-aside width="220px" class="aside">
-      <div class="logo">高新科技产业园</div>
+  <el-container class="app-wrapper">
+    <el-aside width="240px" class="sidebar-container">
+      <div class="logo-area">
+        <h2 class="logo-text">智慧园区 SaaS</h2>
+      </div>
       
-      <el-menu :default-active="$route.path" router background-color="#2c3e50" text-color="#bfcbd9" active-text-color="#409EFF">
-        <el-menu-item v-for="menu in menus" :key="menu.id" :index="menu.path">
-          <el-icon>
-            <component :is="iconMap[menu.icon] || 'Menu'" />
-          </el-icon>
-          <span>{{ menu.name }}</span>
-        </el-menu-item>
-      </el-menu>
+      <el-scrollbar>
+        <el-menu
+          :default-active="activeMenu"
+          class="el-menu-vertical"
+          background-color="#304156"
+          text-color="#bfcbd9"
+          active-text-color="#409EFF"
+          router
+        >
+          <el-menu-item index="/dashboard">
+            <el-icon><Odometer /></el-icon>
+            <template #title>数据可视化大屏</template>
+          </el-menu-item>
+
+          <el-sub-menu index="assets">
+            <template #title>
+              <el-icon><OfficeBuilding /></el-icon>
+              <span>资产与企业管网</span>
+            </template>
+            <el-menu-item index="/buildings">大厦与资产大盘</el-menu-item>
+            <el-menu-item index="/spaces">房源资产精细库</el-menu-item>
+            <el-menu-item index="/enterprises">企业户籍档案</el-menu-item>
+            <el-menu-item index="/contracts">租务与合同中心</el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="property-hub">
+            <template #title>
+              <el-icon><Avatar /></el-icon>
+              <span>综合物业与工单</span>
+            </template>
+            <el-menu-item index="/workOrder">外勤工单大盘</el-menu-item>
+            <el-menu-item index="/decoration">装修报备管理</el-menu-item>
+            <el-menu-item index="/meeting">
+              <el-icon><Calendar /></el-icon>共享会议室管网
+            </el-menu-item>
+            <el-menu-item index="/services">基层服务人员管理</el-menu-item>
+            <el-menu-item index="/inventory">仓库与物料管理</el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="finance-hub">
+            <template #title>
+              <el-icon><Wallet /></el-icon>
+              <span>业财与计费中枢</span>
+            </template>
+            <el-menu-item index="/finance">业财一体化中心</el-menu-item>
+            <el-menu-item index="/fee-config">计费策略配置</el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="iot-hub">
+            <template #title>
+              <el-icon><Cpu /></el-icon>
+              <span>物联与安防中枢</span>
+            </template>
+            <el-menu-item index="/iot">IoT智能网联中心</el-menu-item>
+            <el-menu-item index="/patrol">智能安防巡检</el-menu-item>
+            <el-menu-item index="/vehicles">车位月卡与收费</el-menu-item>
+          </el-sub-menu>
+
+          <el-menu-item index="/leads">
+            <el-icon><Phone /></el-icon>
+            <template #title>招商与线索中心</template>
+          </el-menu-item>
+          <el-menu-item index="/reports">
+            <el-icon><DataAnalysis /></el-icon>
+            <template #title>报表与 BI 中心</template>
+          </el-menu-item>
+          <el-menu-item index="/system">
+            <el-icon><Setting /></el-icon>
+            <template #title>系统与权限控制</template>
+          </el-menu-item>
+        </el-menu>
+      </el-scrollbar>
     </el-aside>
-    
-    <el-container>
-      <el-header class="header">
+
+    <el-container class="main-container">
+      <el-header class="nav-header">
         <div class="header-left">
-          <span class="page-title">{{ $route.meta.title || 'SaaS 资产工作台' }}</span>
+          <el-icon class="fold-btn"><Expand /></el-icon>
+          <el-breadcrumb separator="/">
+            <el-breadcrumb-item :to="{ path: '/dashboard' }">首页</el-breadcrumb-item>
+            <el-breadcrumb-item>{{ currentRouteTitle }}</el-breadcrumb-item>
+          </el-breadcrumb>
         </div>
         <div class="header-right">
-          <el-icon style="margin-right: 8px;"><UserFilled /></el-icon>
-          <span class="user-info" style="margin-right: 20px;">{{ userInfo.real_name || '操作员' }}</span>
-          <el-button type="danger" link @click="handleLogout">
-            <el-icon><SwitchButton /></el-icon> 退出登录
-          </el-button>
+          <el-dropdown trigger="click">
+            <span class="el-dropdown-link user-profile">
+              <el-avatar size="small" src="https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png" />
+              <span class="username">超级管理员</span>
+              <el-icon class="el-icon--right"><arrow-down /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </el-header>
-      <el-main class="main">
-        <router-view />
+
+      <el-main class="app-main">
+        <router-view v-slot="{ Component }">
+          <transition name="fade-transform" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
       </el-main>
     </el-container>
   </el-container>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { ElMessage, ElNotification } from 'element-plus'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { 
-  Odometer, Setting, OfficeBuilding, School, Van, User, 
-  Memo, Document, Money, Aim, Service, DataLine, Box, 
-  UserFilled, SwitchButton 
+  Odometer, OfficeBuilding, Wallet, Cpu, Calendar, 
+  Avatar, Phone, DataAnalysis, Setting, Expand, ArrowDown
 } from '@element-plus/icons-vue'
-import request from '../../utils/request'
 
-const router = useRouter()
 const route = useRoute()
-const userInfo = ref({})
+const router = useRouter()
 
-const iconMap = {
-  Odometer, Setting, OfficeBuilding, School, Van, User, 
-  Memo, Document, Money, Aim, Service, DataLine, Box
-}
-
-const menus = ref([])
-let pollTimer = null
-let notifInstance = null
-let lastPendingCount = 0
+const activeMenu = computed(() => route.path)
+const currentRouteTitle = computed(() => route.meta.title || '工作台')
 
 const handleLogout = () => {
   localStorage.removeItem('saas_token')
-  localStorage.removeItem('saas_user')
   router.push('/login')
 }
-
-const fetchDynamicMenus = async () => {
-  try {
-    const res = await request.get('/api/system/getMyMenus')
-    if (res.code === 200) {
-      menus.value = res.data
-      
-      // 【核心安全拦截引擎】：防越权访问
-      if (menus.value.length > 0) {
-        const currentPath = route.path
-        // 判断当前用户正在访问的路由，是否在他的授权菜单列表里
-        const hasPermission = menus.value.some(m => m.path === currentPath)
-        
-        if (!hasPermission) {
-          // 如果没有权限（比如被默认路由带到了 dashboard 但他没有这个权限）
-          // 强制重定向到他权限列表里的第一个页面！
-          router.replace(menus.value[0].path)
-        }
-      } else {
-        ElMessage.error('您的账号尚未分配任何系统模块权限，请联系管理员分配！')
-      }
-    }
-  } catch (e) {}
-}
-
-const checkGlobalNotifications = async () => {
-  try {
-    const res = await request.get('/api/finance/receivables/list', { timeout: 8000 })
-    if (res.code === 200) {
-      const pendingBills = res.data.filter(item => Number(item.is_paid) === 2)
-      const pendingCount = pendingBills.length
-
-      if (pendingCount > 0 && pendingCount !== lastPendingCount) {
-        lastPendingCount = pendingCount
-        if (notifInstance) notifInstance.close()
-
-        notifInstance = ElNotification({
-          title: '资金核销紧急提醒',
-          message: `系统探测到 ${pendingCount} 笔待审核的打款凭证。点击此通知立即直达审核室。`,
-          type: 'warning',
-          duration: 0,
-          position: 'bottom-right',
-          customClass: 'clickable-notif',
-          onClick: () => {
-            const targetId = pendingBills[0].id
-            router.push({ path: '/finance', query: { review_bill_id: targetId, _t: Date.now() } })
-            if (notifInstance) { notifInstance.close(); notifInstance = null }
-          },
-          onClose: () => { lastPendingCount = 0 }
-        })
-      } else if (pendingCount === 0 && notifInstance) {
-        notifInstance.close()
-        notifInstance = null
-        lastPendingCount = 0
-      }
-    }
-  } catch (e) {}
-}
-
-onMounted(() => {
-  const userStr = localStorage.getItem('saas_user')
-  if (userStr) {
-    userInfo.value = JSON.parse(userStr)
-  }
-  fetchDynamicMenus()
-  checkGlobalNotifications()
-  pollTimer = setInterval(checkGlobalNotifications, 15000)
-})
-
-onUnmounted(() => {
-  if (pollTimer) clearInterval(pollTimer)
-  if (notifInstance) notifInstance.close()
-})
 </script>
 
-<style>
-.clickable-notif { cursor: pointer !important; transition: all 0.2s; }
-.clickable-notif:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; opacity: 0.95; }
-</style>
-
 <style scoped>
-.layout-container { height: 100vh; }
-.aside { background-color: #2c3e50; color: #fff; display: flex; flex-direction: column; }
-.logo { height: 60px; line-height: 60px; text-align: center; font-size: 18px; font-weight: bold; background-color: #1e2b3c; }
-.el-menu { border-right: none; flex: 1; overflow-y: auto; }
-.header { background-color: #fff; border-bottom: 1px solid #eef1f6; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; height: 60px; }
-.header-left .page-title { font-size: 18px; font-weight: bold; color: #303133; }
-.header-right { display: flex; align-items: center; cursor: pointer; }
-.user-info { font-weight: bold; color: #409eff; }
-.main { background-color: #f0f2f5; padding: 20px; overflow-y: auto; }
+.app-wrapper { height: 100vh; width: 100vw; overflow: hidden; }
+.sidebar-container { background-color: #304156; transition: width 0.28s; display: flex; flex-direction: column; }
+.logo-area { height: 60px; line-height: 60px; text-align: center; background-color: #2b3643; color: #fff; }
+.logo-text { margin: 0; font-size: 18px; font-weight: 600; }
+.el-menu-vertical { border-right: none; }
+.nav-header { height: 60px; background: #fff; box-shadow: 0 1px 4px rgba(0,21,41,.08); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+.header-left { display: flex; align-items: center; }
+.fold-btn { font-size: 20px; cursor: pointer; margin-right: 20px; }
+.header-right { display: flex; align-items: center; }
+.user-profile { display: flex; align-items: center; cursor: pointer; }
+.username { margin-left: 8px; font-size: 14px; color: #333; }
+.app-main { background-color: #f0f2f5; padding: 20px; overflow-y: auto; }
+.fade-transform-leave-active, .fade-transform-enter-active { transition: all .3s; }
+.fade-transform-enter-from { opacity: 0; transform: translateX(-30px); }
+.fade-transform-leave-to { opacity: 0; transform: translateX(30px); }
 </style>

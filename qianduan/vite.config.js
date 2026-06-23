@@ -1,17 +1,22 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { resolve } from 'path' // 👈 新增：引入 path 解析
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  // 核心修改：根据当前环境加载对应的 .env 文件
   const env = loadEnv(mode, process.cwd());
 
   return {
     plugins: [vue()],
+    // 👇 核心修复：配置路径别名，让 Vite 认识 `@` 代表 `src` 文件夹
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src')
+      }
+    },
     server: {
       proxy: {
         '/api': {
-          // 核心修改：代理目标不再写死，改为读取环境变量 VITE_API_TARGET
           target: env.VITE_API_TARGET,
           changeOrigin: true
         }
