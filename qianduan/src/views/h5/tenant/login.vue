@@ -7,12 +7,12 @@
         <p class="subtitle">园区业务办理与自助缴费通道</p>
       </div>
 
-      <el-form ref="formRef" :model="form" :rules="rules" size="large" class="login-form">
-        <el-form-item prop="username">
-          <el-input v-model="form.username" placeholder="请输入联系人手机号" prefix-icon="User" clearable />
+      <el-form ref="formRef" :model="form" :rules="rules" size="large" class="login-form" @submit.prevent>
+        <el-form-item prop="phone">
+          <el-input v-model="form.phone" placeholder="请输入联系人手机号" :prefix-icon="User" clearable @keyup.enter="handleLogin" />
         </el-form-item>
         <el-form-item prop="password">
-          <el-input v-model="form.password" type="password" placeholder="请输入登录密码(默认123456)" prefix-icon="Lock" show-password @keyup.enter="handleLogin" />
+          <el-input v-model="form.password" type="password" placeholder="请输入登录密码(默认123456)" :prefix-icon="Lock" show-password @keyup.enter="handleLogin" />
         </el-form-item>
         
         <el-button type="primary" class="submit-btn" :loading="loading" @click="handleLogin">
@@ -38,29 +38,37 @@ const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
 
-const form = reactive({ username: '', password: '' })
+const form = reactive({ phone: '', password: '' })
 const rules = {
-  username: [{ required: true, message: '手机号必填', trigger: 'blur' }],
+  phone: [{ required: true, message: '手机号必填', trigger: 'blur' }],
   password: [{ required: true, message: '密码必填', trigger: 'blur' }]
 }
 
 const handleLogin = () => {
+  if (!formRef.value) return
+
   formRef.value.validate(async (valid) => {
-    if (!valid) return
+    // 核心修复 4：如果表单校验没通过，必须给出显式警告，不能静默拦截
+    if (!valid) {
+      ElMessage.warning('请检查手机号或密码是否已填写')
+      return
+    }
+    
     loading.value = true
     try {
       const res = await request.post('/api/tenant/login', form)
       if (res.code === 200) {
-        // 核心修复：独立存储租户 Token，避免与 PC 管理端串号
         localStorage.setItem('h5_tenant_token', res.data.token)
-        localStorage.setItem('tenant_info', JSON.stringify(res.data.user_info))
+        localStorage.setItem('tenant_info', JSON.stringify(res.data.tenant_info))
         ElMessage.success('欢迎进入企业租户服务门户')
-        router.push('/h5/tenant')
+        router.push('/h5/tenant/index')
       } else {
-        ElMessage.error(res.msg)
+        ElMessage.error(res.msg || '登录验证失败')
       }
     } catch (e) {
-      // 错误静默由拦截器处理
+      // 核心修复 5：捕获 500 级崩溃异常并强制暴露
+      console.error('前端捕获异常:', e)
+      ElMessage.error('系统异常：请按 F12 检查浏览器控制台或联系管理员')
     } finally {
       loading.value = false
     }

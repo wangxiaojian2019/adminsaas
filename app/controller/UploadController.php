@@ -2,54 +2,103 @@
 namespace app\controller;
 
 use support\Request;
-use support\Log;
+use support\Db;
 
 class UploadController
 {
+    // 定义绝对安全的后缀白名单（防 WebShell 物理隔离）
+    private $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'zip', 'rar'];
+    
+    // 定义文件大小上限 (10MB)
+    private $maxSize = 10 * 1024 * 1024;
+
+    /**
+     * 全局统一分布式上传网关
+     */
     public function upload(Request $request)
     {
-        // 核心修复1：底层容错抓取，兼容前端 el-upload 默认的 'file' 字段，或自动嗅探首个可用文件流
+        // 1. 提取上传的文件对象
         $file = $request->file('file');
-        
-        if (empty($file)) {
-            $files = $request->file();
-            if (!empty($files)) {
-                $file = current($files);
-            }
-        }
-
-        // 如果仍未抓取到文件，抛出精准排错信息，供前端追踪
         if (!$file || !$file->isValid()) {
-            return json(['code' => 400, 'msg' => '阻断：未能从请求中解析到合法的物理文件流']);
+            return json(['code' => 400, 'msg' => '未找到文件或文件在传输过程中损坏']);
         }
 
-        // 提取指纹并赋予防冲突的独立哈希名
-        $ext = $file->getUploadExtension() ?: 'png';
-        $filename = uniqid('cert_') . '.' . $ext;
-        
-        // 核心修复2：目录沙箱的权限嗅探与自动构建
-        $saveDir = public_path() . '/uploads';
-        if (!is_dir($saveDir)) {
-            @mkdir($saveDir, 0777, true);
+        // 2. 核心安全防御：校验文件大小
+        if ($file->getSize() > $this->maxSize) {
+            return json(['code' => 413, 'msg' => '安全拦截：文件大小超出 10MB 限制']);
         }
-        
-        $savePath = $saveDir . '/' . $filename;
+
+        // 3. 核心安全防御：校验文件后缀 (严禁 php, sh, exe 等后缀)
+        $extension = strtolower($file->getUploadExtension());
+        if (!in_array($extension, $this->allowedExtensions)) {
+            return json(['code' => 415, 'msg' => '安全拦截：不允许上传此类型的文件，谨防恶意木马']);
+        }
+
+        // 4. 解析操作人身份 (从之前重构的 JWT AuthMiddleware 中提取)
+        $tenantId = 1;
+        $uploaderType = 'unknown';
+        $uploaderId = 0;
+
+        if (isset($request->tenantId)) {
+            $tenantId = $request->tenantId;
+        }
+        if (isset($request->enterprise_id)) {
+            $uploaderType = 'tenant';
+            $uploaderId = $request->enterprise_id;
+        } elseif (isset($request->user)) {
+            // 如果是 PC 端物业管理员或外勤师傅
+            $uploaderType = 'admin';
+            $uploaderId = $request->user->id ?? 0;
+        }
+
+        // 5. 存储策略驱动分配 (目前为 local，可随时无缝切换为 aliyun)
+        $storageDriver = 'local';
         
         try {
-            // 执行物理迁移写入
-            $file->move($savePath);
+            // 生成防碰撞的安全文件名
+            $safeFileName = date('YmdHis') . '_' . bin2hex(random_bytes(8)) . '.' . $extension;
             
-            // 核心修复3：严格对齐前端强制要求的 JSON 结构校验锁 (code 必须为 200)
+            // 按月份归档目录，防止单一目录文件数过万导致 Linux IO 卡死
+            $monthDir = date('Ym');
+            $relativeDir = '/uploads/' . $monthDir;
+            $absoluteDir = public_path() . $relativeDir;
+            
+            if (!is_dir($absoluteDir)) {
+                mkdir($absoluteDir, 0777, true);
+            }
+            
+            $absolutePath = $absoluteDir . '/' . $safeFileName;
+            $fileUrl = $relativeDir . '/' . $safeFileName;
+
+            // 执行物理转移
+            $file->move($absolutePath);
+
+            // 6. 将资产写入全局系统附件底库
+            $attachmentId = Db::table('sys_attachments')->insertGetId([
+                'tenant_id' => $tenantId,
+                'uploader_type' => $uploaderType,
+                'uploader_id' => $uploaderId,
+                'original_name' => $file->getUploadName(),
+                'file_url' => $fileUrl,
+                'file_size' => $file->getSize(),
+                'file_ext' => $extension,
+                'mime_type' => $file->getUploadMineType(),
+                'storage_driver' => $storageDriver,
+                'created_at' => date('Y-m-d H:i:s')
+            ]);
+
+            // 返回前端组件严格要求的数据结构
             return json([
-                'code' => 200,
-                'msg'  => 'success',
+                'code' => 200, 
+                'msg' => '上传成功', 
                 'data' => [
-                    'url' => '/uploads/' . $filename
+                    'url' => $fileUrl,
+                    'attachment_id' => $attachmentId
                 ]
             ]);
+
         } catch (\Exception $e) {
-            Log::error('文件写入底层报错：' . $e->getMessage());
-            return json(['code' => 500, 'msg' => '服务器写入文件失败，请检查 public/uploads 目录读写权限']);
+            return json(['code' => 500, 'msg' => '存储驱动落盘失败：' . $e->getMessage()]);
         }
     }
 }

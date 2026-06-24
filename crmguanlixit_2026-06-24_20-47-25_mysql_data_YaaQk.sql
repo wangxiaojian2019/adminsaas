@@ -49,7 +49,7 @@ CREATE TABLE `admins` (
 
 LOCK TABLES `admins` WRITE;
 /*!40000 ALTER TABLE `admins` DISABLE KEYS */;
-INSERT INTO `admins` VALUES (1,1,'admin','e10adc3949ba59abbe56e057f20f883e','超级管理员',NULL,'高新科技产业园',1,0,1,'2026-01-01 09:00:00','总控中心指挥官','负责全园区 SaaS 平台底座所有宏观资产、配置和权限的最高控制权','2026-06-12 14:28:01','183.161.183.48',1),(2,1,'manager01','e10adc3949ba59abbe56e057f20f883e','招商总监-刘总',NULL,'高新科技产业园',2,0,1,'2026-01-02 10:00:00','招商部负责人','全面统筹客户线索、企业建档入驻契约、大厦去化热力图穿透流转',NULL,NULL,2),(3,1,'finance01','e10adc3949ba59abbe56e057f20f883e','财务主管-特特',NULL,'高新科技产业园',3,0,1,'2026-01-02 11:00:00','业财核销组长','统扣全园区租金、物业能耗账单催收，以及退租清算单的最终退款结清',NULL,NULL,3),(101,1,'13755667788','e10adc3949ba59abbe56e057f20f883e','张三',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','安保专员','负责全园区安防网格防区定点巡更打卡，隐患即时上报中控调度室','2026-06-12 12:17:41','183.161.183.48',4),(102,1,'13899887766','e10adc3949ba59abbe56e057f20f883e','李四',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','保洁组长','负责公共区域绿化清洁、生活垃圾定点消杀打卡监督','2026-06-12 13:50:58','183.161.183.48',4),(103,1,'13911223344','e10adc3949ba59abbe56e057f20f883e','王五',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','工程维修','承接中控派发的所有强弱电、空调漏水、物理设施破坏的现场抢修打卡',NULL,NULL,4),(104,1,'13455667788','e10adc3949ba59abbe56e057f20f883e','荔湾三','1345566778','高新科技产业园',6,2,1,'2026-06-14 22:01:15',NULL,NULL,NULL,NULL,0);
+INSERT INTO `admins` VALUES (1,1,'admin','e10adc3949ba59abbe56e057f20f883e','超级管理员',NULL,'高新科技产业园',1,0,1,'2026-01-01 09:00:00','总控中心指挥官','负责全园区 SaaS 平台底座所有宏观资产、配置和权限的最高控制权','2026-06-24 20:42:45','223.215.60.73',1),(2,1,'manager01','e10adc3949ba59abbe56e057f20f883e','招商总监-刘总',NULL,'高新科技产业园',2,0,1,'2026-01-02 10:00:00','招商部负责人','全面统筹客户线索、企业建档入驻契约、大厦去化热力图穿透流转',NULL,NULL,2),(3,1,'finance01','e10adc3949ba59abbe56e057f20f883e','财务主管-特特',NULL,'高新科技产业园',3,0,1,'2026-01-02 11:00:00','业财核销组长','统扣全园区租金、物业能耗账单催收，以及退租清算单的最终退款结清',NULL,NULL,3),(101,1,'13755667788','e10adc3949ba59abbe56e057f20f883e','张三',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','安保专员','负责全园区安防网格防区定点巡更打卡，隐患即时上报中控调度室','2026-06-12 12:17:41','183.161.183.48',4),(102,1,'13899887766','e10adc3949ba59abbe56e057f20f883e','李四',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','保洁组长','负责公共区域绿化清洁、生活垃圾定点消杀打卡监督','2026-06-12 13:50:58','183.161.183.48',4),(103,1,'13911223344','e10adc3949ba59abbe56e057f20f883e','王五',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','工程维修','承接中控派发的所有强弱电、空调漏水、物理设施破坏的现场抢修打卡',NULL,NULL,4),(104,1,'13455667788','e10adc3949ba59abbe56e057f20f883e','荔湾三','1345566778','高新科技产业园',6,2,1,'2026-06-14 22:01:15',NULL,NULL,NULL,NULL,0);
 /*!40000 ALTER TABLE `admins` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -69,6 +69,7 @@ CREATE TABLE `buildings` (
   `building_area` decimal(10,2) NOT NULL DEFAULT '0.00',
   `manager_name` varchar(50) DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at` datetime DEFAULT NULL COMMENT '软删除时间戳',
   PRIMARY KEY (`id`),
   KEY `idx_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4;
@@ -80,7 +81,7 @@ CREATE TABLE `buildings` (
 
 LOCK TABLES `buildings` WRITE;
 /*!40000 ALTER TABLE `buildings` DISABLE KEYS */;
-INSERT INTO `buildings` VALUES (1,1,'京东大厦',1,5,25000.00,'张经理','2026-01-01 08:00:00'),(2,1,'腾讯大厦',1,5,35000.00,'陈主管','2026-01-02 08:00:00'),(3,1,'测试',1,1,100.00,'','2026-06-12 14:16:04'),(4,1,'拓普大厦',1,18,36000.00,'湖先生','2026-06-20 00:14:03'),(5,1,'甬城公寓',2,8,16000.00,'湖湖先生','2026-06-20 00:39:06');
+INSERT INTO `buildings` VALUES (1,1,'京东大厦',1,5,25000.00,'张经理','2026-01-01 08:00:00',NULL),(2,1,'腾讯大厦',1,5,35000.00,'陈主管','2026-01-02 08:00:00',NULL),(3,1,'测试',1,1,100.00,'','2026-06-12 14:16:04',NULL),(4,1,'拓普大厦',1,18,36000.00,'湖先生','2026-06-20 00:14:03',NULL),(5,1,'甬城公寓',2,8,16000.00,'湖湖先生','2026-06-20 00:39:06',NULL);
 /*!40000 ALTER TABLE `buildings` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -179,6 +180,7 @@ CREATE TABLE `contracts` (
   `next_bill_date` date DEFAULT NULL COMMENT '下期账单生成日',
   `vehicle_info` varchar(255) DEFAULT NULL COMMENT '车辆及车位信息备注',
   `updated_at` datetime DEFAULT NULL COMMENT '更新时间',
+  `deleted_at` datetime DEFAULT NULL COMMENT '软删除时间戳',
   PRIMARY KEY (`id`),
   KEY `idx_tenant_contract` (`tenant_id`,`status`)
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4;
@@ -190,7 +192,7 @@ CREATE TABLE `contracts` (
 
 LOCK TABLES `contracts` WRITE;
 /*!40000 ALTER TABLE `contracts` DISABLE KEYS */;
-INSERT INTO `contracts` VALUES (1,1,0,0,'HT20260611001',1,1,'2026-01-15','2026-01-15','2027-01-14',15000.00,30000.00,0.00,0.00,0,NULL,NULL,NULL,'2026-01-15 15:00:00',1500.00,3,'2026-07-15','粤B12345固定车位','2026-06-20 15:19:24'),(2,1,0,0,'HT20260611002',2,2,'2026-02-01','2026-02-01','2027-01-31',12000.00,24000.00,0.00,0.00,1,NULL,NULL,NULL,'2026-01-20 10:00:00',1200.00,3,'2026-08-01','无',NULL),(3,1,0,0,'HT20260611003',3,4,'2026-03-01','2026-03-01','2028-02-28',20000.00,40000.00,0.00,0.00,0,NULL,NULL,NULL,'2026-02-15 14:00:00',2000.00,3,'2026-09-01','粤B99999',NULL),(4,1,0,0,'HT20260620000145',6,3,'2026-06-20','2026-06-20','2027-06-19',2240.00,7620.00,0.00,0.00,0,NULL,NULL,NULL,'2026-06-20 00:01:15',300.00,3,NULL,'',NULL),(5,1,0,0,'HT20260620000612',7,10,'2026-06-20','2026-06-20','2027-06-19',2800.00,0.00,0.00,0.00,0,NULL,NULL,NULL,'2026-06-20 00:06:27',300.00,3,NULL,'',NULL),(6,1,0,0,'HT20260620004553',8,34,'2026-06-20','2026-06-20','2026-07-19',900.00,900.00,0.00,0.00,1,NULL,NULL,NULL,'2026-06-20 00:45:57',0.00,3,NULL,'',NULL),(7,1,1,1,'HT20260611001-变更260620',1,1,'2026-01-15','2026-01-15','2027-01-14',2000.00,30000.00,0.00,0.00,1,'/uploads/cert_6a363e631e441.jpg',NULL,NULL,'2026-06-20 15:19:24',2500.00,3,'2026-07-15',NULL,NULL),(8,1,0,0,'HT202606201545443432',1,13,'2026-06-20',NULL,'2027-07-19',5000.00,200.00,0.00,0.00,0,'/uploads/cert_6a36452592990.jpg',NULL,NULL,'2026-06-20 15:45:44',500.00,3,'2026-09-20','','2026-06-20 17:45:04'),(9,1,8,3,'HT202606201545443432-变更260620',1,36,'2026-06-20','2026-06-20','2027-07-19',5000.00,200.00,0.00,0.00,1,'/uploads/cert_6a36611fde004.jpg',NULL,NULL,'2026-06-20 17:45:04',500.00,3,'2026-09-20',NULL,'2026-06-20 17:45:04'),(10,1,0,0,'HT20260621220574',9,38,'2026-06-23',NULL,'2027-06-22',6000.00,3000.00,0.00,0.00,1,NULL,NULL,NULL,'2026-06-21 22:05:24',800.00,3,NULL,'',NULL);
+INSERT INTO `contracts` VALUES (1,1,0,0,'HT20260611001',1,1,'2026-01-15','2026-01-15','2027-01-14',15000.00,30000.00,0.00,0.00,0,NULL,NULL,NULL,'2026-01-15 15:00:00',1500.00,3,'2026-07-15','粤B12345固定车位','2026-06-20 15:19:24',NULL),(2,1,0,0,'HT20260611002',2,2,'2026-02-01','2026-02-01','2027-01-31',12000.00,24000.00,0.00,0.00,1,NULL,NULL,NULL,'2026-01-20 10:00:00',1200.00,3,'2026-08-01','无',NULL,NULL),(3,1,0,0,'HT20260611003',3,4,'2026-03-01','2026-03-01','2028-02-28',20000.00,40000.00,0.00,0.00,0,NULL,NULL,NULL,'2026-02-15 14:00:00',2000.00,3,'2026-09-01','粤B99999',NULL,NULL),(4,1,0,0,'HT20260620000145',6,3,'2026-06-20','2026-06-20','2027-06-19',2240.00,7620.00,0.00,0.00,0,NULL,NULL,NULL,'2026-06-20 00:01:15',300.00,3,NULL,'',NULL,NULL),(5,1,0,0,'HT20260620000612',7,10,'2026-06-20','2026-06-20','2027-06-19',2800.00,0.00,0.00,0.00,0,NULL,NULL,NULL,'2026-06-20 00:06:27',300.00,3,NULL,'',NULL,NULL),(6,1,0,0,'HT20260620004553',8,34,'2026-06-20','2026-06-20','2026-07-19',900.00,900.00,0.00,0.00,1,NULL,NULL,NULL,'2026-06-20 00:45:57',0.00,3,NULL,'',NULL,NULL),(7,1,1,1,'HT20260611001-变更260620',1,1,'2026-01-15','2026-01-15','2027-01-14',2000.00,30000.00,0.00,0.00,1,'/uploads/cert_6a363e631e441.jpg',NULL,NULL,'2026-06-20 15:19:24',2500.00,3,'2026-07-15',NULL,NULL,NULL),(8,1,0,0,'HT202606201545443432',1,13,'2026-06-20',NULL,'2027-07-19',5000.00,200.00,0.00,0.00,0,'/uploads/cert_6a36452592990.jpg',NULL,NULL,'2026-06-20 15:45:44',500.00,3,'2026-09-20','','2026-06-20 17:45:04',NULL),(9,1,8,3,'HT202606201545443432-变更260620',1,36,'2026-06-20','2026-06-20','2027-07-19',5000.00,200.00,0.00,0.00,1,'/uploads/cert_6a36611fde004.jpg',NULL,NULL,'2026-06-20 17:45:04',500.00,3,'2026-09-20',NULL,'2026-06-20 17:45:04',NULL),(10,1,0,0,'HT20260621220574',9,38,'2026-06-23',NULL,'2027-06-22',6000.00,3000.00,0.00,0.00,1,NULL,NULL,NULL,'2026-06-21 22:05:24',800.00,3,NULL,'',NULL,NULL);
 /*!40000 ALTER TABLE `contracts` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -449,6 +451,36 @@ INSERT INTO `inventory_records` VALUES (1,1,2,1,10,'系统管理员',NULL,'系�
 UNLOCK TABLES;
 
 --
+-- Table structure for table `iot_command_logs`
+--
+
+DROP TABLE IF EXISTS `iot_command_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `iot_command_logs` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `device_sn` varchar(100) NOT NULL,
+  `command_type` varchar(50) NOT NULL COMMENT '指令特征码: open_door, power_off, reset',
+  `operator_id` int(11) NOT NULL COMMENT '下发指令的控制台操作员ID',
+  `status` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0:请求已下发 1:设备已响应成功 2:执行失败/超时',
+  `response_payload` text COMMENT '设备底层回执报文',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_sn_status` (`device_sn`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IoT指令审计控制台';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `iot_command_logs`
+--
+
+LOCK TABLES `iot_command_logs` WRITE;
+/*!40000 ALTER TABLE `iot_command_logs` DISABLE KEYS */;
+/*!40000 ALTER TABLE `iot_command_logs` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `iot_devices`
 --
 
@@ -480,6 +512,32 @@ LOCK TABLES `iot_devices` WRITE;
 /*!40000 ALTER TABLE `iot_devices` DISABLE KEYS */;
 INSERT INTO `iot_devices` VALUES (1,1,1,'MAC-00-1A-2B-3C-4D-5E',1,'正泰智能电表',1,NULL,NULL,'2026-06-23 19:02:13'),(2,1,1,'MAC-00-1A-2B-3C-4D-5F',2,'海康智能水表',1,NULL,NULL,'2026-06-23 19:02:13'),(3,1,2,'MAC-A1-B2-C3-D4-E5-F6',3,'大华闸机门禁',0,NULL,NULL,'2026-06-23 19:02:13'),(4,1,3,'MAC-FF-EE-DD-CC-BB-AA',1,'正泰智能电表',2,NULL,NULL,'2026-06-23 19:02:13');
 /*!40000 ALTER TABLE `iot_devices` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `iot_telemetry_logs`
+--
+
+DROP TABLE IF EXISTS `iot_telemetry_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `iot_telemetry_logs` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `device_sn` varchar(100) NOT NULL COMMENT '设备SN码',
+  `data_payload` json NOT NULL COMMENT '遥测核心数据包(JSON格式)',
+  `reported_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '硬件实际上报时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_device_time` (`device_sn`,`reported_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IoT设备遥测时序归档表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `iot_telemetry_logs`
+--
+
+LOCK TABLES `iot_telemetry_logs` WRITE;
+/*!40000 ALTER TABLE `iot_telemetry_logs` DISABLE KEYS */;
+/*!40000 ALTER TABLE `iot_telemetry_logs` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -598,6 +656,7 @@ DROP TABLE IF EXISTS `meeting_rooms`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `meeting_rooms` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
+  `tenant_id` int(11) NOT NULL DEFAULT '1' COMMENT '租户ID',
   `name` varchar(100) NOT NULL,
   `capacity` int(11) NOT NULL,
   `free_hours` int(11) NOT NULL DEFAULT '0' COMMENT '每次预订免费时长(小时)',
@@ -606,6 +665,7 @@ CREATE TABLE `meeting_rooms` (
   `has_whiteboard` tinyint(1) DEFAULT '0',
   `has_video_conf` tinyint(1) DEFAULT '0',
   `status` varchar(20) DEFAULT 'idle',
+  `deleted_at` datetime DEFAULT NULL COMMENT '软删除时间戳',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COMMENT='会议室资产物理表';
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -616,7 +676,7 @@ CREATE TABLE `meeting_rooms` (
 
 LOCK TABLES `meeting_rooms` WRITE;
 /*!40000 ALTER TABLE `meeting_rooms` DISABLE KEYS */;
-INSERT INTO `meeting_rooms` VALUES (1,'V01 极客董事局',20,2,200.00,1,1,1,'idle'),(2,'M02 创客洽谈室',8,1,50.00,0,1,0,'idle'),(3,'M03 敏捷作战室',12,0,100.00,1,1,0,'active');
+INSERT INTO `meeting_rooms` VALUES (1,1,'V01 极客董事局',20,2,200.00,1,1,1,'idle',NULL),(2,1,'M02 创客洽谈室',8,1,50.00,0,1,0,'idle',NULL),(3,1,'M03 敏捷作战室',12,0,100.00,1,1,0,'active',NULL);
 /*!40000 ALTER TABLE `meeting_rooms` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -770,6 +830,38 @@ LOCK TABLES `patrol_records` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `payment_transactions`
+--
+
+DROP TABLE IF EXISTS `payment_transactions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `payment_transactions` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `tenant_id` int(11) NOT NULL DEFAULT '1',
+  `receivable_id` int(11) NOT NULL COMMENT '关联应收账单ID',
+  `enterprise_id` int(11) NOT NULL COMMENT '打款企业',
+  `pay_amount` decimal(10,2) NOT NULL DEFAULT '0.00' COMMENT '本次打款金额',
+  `receipt_url` varchar(255) DEFAULT NULL COMMENT '转账凭证截图',
+  `status` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0待审核 1已通过 2已驳回',
+  `reject_reason` varchar(255) DEFAULT NULL COMMENT '驳回原因',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `audit_time` datetime DEFAULT NULL COMMENT '财务审核时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_receivable` (`receivable_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='财务打款核销流水表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `payment_transactions`
+--
+
+LOCK TABLES `payment_transactions` WRITE;
+/*!40000 ALTER TABLE `payment_transactions` DISABLE KEYS */;
+/*!40000 ALTER TABLE `payment_transactions` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `permissions`
 --
 
@@ -812,6 +904,7 @@ CREATE TABLE `receivables` (
   `space_id` int(11) NOT NULL,
   `bill_type` tinyint(1) NOT NULL DEFAULT '1' COMMENT '1:租金 2:水费 3:电费 4:物业费 5:滞纳金',
   `amount` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `paid_amount` decimal(10,2) NOT NULL DEFAULT '0.00' COMMENT '已安全核销的累计金额',
   `due_date` date NOT NULL,
   `is_paid` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0:未核销 1:已核销',
   `reject_reason` varchar(255) DEFAULT NULL COMMENT '财务驳回原因',
@@ -830,7 +923,7 @@ CREATE TABLE `receivables` (
 
 LOCK TABLES `receivables` WRITE;
 /*!40000 ALTER TABLE `receivables` DISABLE KEYS */;
-INSERT INTO `receivables` VALUES (1,1,1,1,1,15000.00,'2026-04-20',1,NULL,'2026-04-12 10:00:00','2026-04-10 08:00:00',NULL,NULL),(2,1,1,1,4,1500.00,'2026-04-20',1,NULL,'2026-04-12 10:05:00','2026-04-10 08:00:00',NULL,NULL),(3,1,2,2,1,12000.00,'2026-05-20',1,NULL,'2026-05-15 14:00:00','2026-05-10 08:00:00',NULL,NULL),(4,1,2,2,3,850.00,'2026-05-20',1,NULL,'2026-05-15 14:00:00','2026-05-10 08:00:00',NULL,NULL),(5,1,3,4,1,20000.00,'2026-06-20',0,NULL,NULL,'2026-06-10 08:00:00',NULL,NULL),(6,1,3,4,4,2000.00,'2026-06-20',1,NULL,'2026-06-13 08:27:16','2026-06-10 08:00:00','wechat',''),(7,1,1,1,1,15000.00,'2026-06-20',1,NULL,'2026-06-12 19:38:19','2026-06-10 08:00:00',NULL,NULL),(8,1,1,0,4,2400.00,'2026-06-19',1,NULL,'2026-06-12 10:15:32','2026-06-12 08:42:34',NULL,NULL),(9,1,1,1,1,15000.00,'2026-07-20',0,NULL,NULL,'2026-06-12 20:47:25',NULL,NULL),(10,1,1,1,4,1500.00,'2026-07-20',3,'是不是传错了',NULL,'2026-06-12 20:47:25','bank_transfer','/uploads/cert_6a35606a46647.jpg'),(11,1,1,1,3,450.50,'2026-07-20',0,NULL,NULL,'2026-06-12 20:47:25',NULL,NULL),(12,1,1,1,1,45000.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(13,1,1,1,4,4500.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(14,1,2,2,1,36000.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(15,1,2,2,4,3600.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(16,1,3,4,1,60000.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(17,1,3,4,4,6000.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(18,1,1,1,1,45000.00,'2026-06-22',3,'截图不完整',NULL,'2026-06-15 15:08:59','bank_transfer','/uploads/cert_6a3544f8ac84b.png'),(19,1,1,1,4,4500.00,'2026-06-22',3,'非打款截图',NULL,'2026-06-15 15:08:59','bank_transfer','/uploads/cert_6a350d6b487cb.png'),(20,1,2,2,1,36000.00,'2026-06-22',0,NULL,NULL,'2026-06-15 15:08:59',NULL,NULL),(21,1,2,2,4,3600.00,'2026-06-22',0,NULL,NULL,'2026-06-15 15:08:59',NULL,NULL),(22,1,3,4,1,60000.00,'2026-06-22',0,NULL,NULL,'2026-06-15 15:08:59',NULL,NULL),(23,1,3,4,4,6000.00,'2026-06-22',0,NULL,NULL,'2026-06-15 15:08:59',NULL,NULL),(24,1,1,1,1,6000.00,'2026-06-27',0,NULL,NULL,'2026-06-20 15:28:52',NULL,NULL),(25,1,1,1,4,7500.00,'2026-06-27',0,NULL,NULL,'2026-06-20 15:28:52',NULL,NULL),(26,1,1,13,6,200.00,'2026-06-20',0,NULL,NULL,'2026-06-20 15:45:44',NULL,NULL),(27,1,1,1,1,6000.00,'2026-06-27',0,NULL,NULL,'2026-06-20 16:08:51',NULL,NULL),(28,1,1,1,4,7500.00,'2026-06-27',0,NULL,NULL,'2026-06-20 16:08:51',NULL,NULL),(29,1,1,13,1,15000.00,'2026-06-27',0,NULL,NULL,'2026-06-20 16:08:51',NULL,NULL),(30,1,1,13,4,1500.00,'2026-06-27',0,NULL,NULL,'2026-06-20 16:08:51',NULL,NULL),(31,1,1,36,1,15000.00,'2026-06-28',0,NULL,NULL,'2026-06-21 00:00:09',NULL,NULL),(32,1,1,36,4,1500.00,'2026-06-28',0,NULL,NULL,'2026-06-21 00:00:09',NULL,NULL),(33,1,1,36,3,47995.20,'2026-06-28',0,NULL,NULL,'2026-06-21 22:12:07',NULL,NULL),(34,1,1,36,3,9184.80,'2026-06-28',0,NULL,NULL,'2026-06-21 23:25:05',NULL,NULL),(35,1,2,2,3,1198.80,'2026-06-28',0,NULL,NULL,'2026-06-21 23:59:27',NULL,NULL),(36,1,1,36,3,10.80,'2026-06-29',0,NULL,NULL,'2026-06-22 00:10:00',NULL,NULL);
+INSERT INTO `receivables` VALUES (1,1,1,1,1,15000.00,0.00,'2026-04-20',1,NULL,'2026-04-12 10:00:00','2026-04-10 08:00:00',NULL,NULL),(2,1,1,1,4,1500.00,0.00,'2026-04-20',1,NULL,'2026-04-12 10:05:00','2026-04-10 08:00:00',NULL,NULL),(3,1,2,2,1,12000.00,0.00,'2026-05-20',1,NULL,'2026-05-15 14:00:00','2026-05-10 08:00:00',NULL,NULL),(4,1,2,2,3,850.00,0.00,'2026-05-20',1,NULL,'2026-05-15 14:00:00','2026-05-10 08:00:00',NULL,NULL),(5,1,3,4,1,20000.00,0.00,'2026-06-20',0,NULL,NULL,'2026-06-10 08:00:00',NULL,NULL),(6,1,3,4,4,2000.00,0.00,'2026-06-20',1,NULL,'2026-06-13 08:27:16','2026-06-10 08:00:00','wechat',''),(7,1,1,1,1,15000.00,0.00,'2026-06-20',1,NULL,'2026-06-12 19:38:19','2026-06-10 08:00:00',NULL,NULL),(8,1,1,0,4,2400.00,0.00,'2026-06-19',1,NULL,'2026-06-12 10:15:32','2026-06-12 08:42:34',NULL,NULL),(9,1,1,1,1,15000.00,0.00,'2026-07-20',0,NULL,NULL,'2026-06-12 20:47:25',NULL,NULL),(10,1,1,1,4,1500.00,0.00,'2026-07-20',3,'是不是传错了',NULL,'2026-06-12 20:47:25','bank_transfer','/uploads/cert_6a35606a46647.jpg'),(11,1,1,1,3,450.50,0.00,'2026-07-20',0,NULL,NULL,'2026-06-12 20:47:25',NULL,NULL),(12,1,1,1,1,45000.00,0.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(13,1,1,1,4,4500.00,0.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(14,1,2,2,1,36000.00,0.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(15,1,2,2,4,3600.00,0.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(16,1,3,4,1,60000.00,0.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(17,1,3,4,4,6000.00,0.00,'2026-06-22',0,NULL,NULL,'2026-06-15 14:39:34',NULL,NULL),(18,1,1,1,1,45000.00,0.00,'2026-06-22',3,'截图不完整',NULL,'2026-06-15 15:08:59','bank_transfer','/uploads/cert_6a3544f8ac84b.png'),(19,1,1,1,4,4500.00,0.00,'2026-06-22',3,'非打款截图',NULL,'2026-06-15 15:08:59','bank_transfer','/uploads/cert_6a350d6b487cb.png'),(20,1,2,2,1,36000.00,0.00,'2026-06-22',0,NULL,NULL,'2026-06-15 15:08:59',NULL,NULL),(21,1,2,2,4,3600.00,0.00,'2026-06-22',0,NULL,NULL,'2026-06-15 15:08:59',NULL,NULL),(22,1,3,4,1,60000.00,0.00,'2026-06-22',0,NULL,NULL,'2026-06-15 15:08:59',NULL,NULL),(23,1,3,4,4,6000.00,0.00,'2026-06-22',0,NULL,NULL,'2026-06-15 15:08:59',NULL,NULL),(24,1,1,1,1,6000.00,0.00,'2026-06-27',0,NULL,NULL,'2026-06-20 15:28:52',NULL,NULL),(25,1,1,1,4,7500.00,0.00,'2026-06-27',0,NULL,NULL,'2026-06-20 15:28:52',NULL,NULL),(26,1,1,13,6,200.00,0.00,'2026-06-20',0,NULL,NULL,'2026-06-20 15:45:44',NULL,NULL),(27,1,1,1,1,6000.00,0.00,'2026-06-27',0,NULL,NULL,'2026-06-20 16:08:51',NULL,NULL),(28,1,1,1,4,7500.00,0.00,'2026-06-27',0,NULL,NULL,'2026-06-20 16:08:51',NULL,NULL),(29,1,1,13,1,15000.00,0.00,'2026-06-27',0,NULL,NULL,'2026-06-20 16:08:51',NULL,NULL),(30,1,1,13,4,1500.00,0.00,'2026-06-27',0,NULL,NULL,'2026-06-20 16:08:51',NULL,NULL),(31,1,1,36,1,15000.00,0.00,'2026-06-28',0,NULL,NULL,'2026-06-21 00:00:09',NULL,NULL),(32,1,1,36,4,1500.00,0.00,'2026-06-28',0,NULL,NULL,'2026-06-21 00:00:09',NULL,NULL),(33,1,1,36,3,47995.20,0.00,'2026-06-28',0,NULL,NULL,'2026-06-21 22:12:07',NULL,NULL),(34,1,1,36,3,9184.80,0.00,'2026-06-28',0,NULL,NULL,'2026-06-21 23:25:05',NULL,NULL),(35,1,2,2,3,1198.80,0.00,'2026-06-28',0,NULL,NULL,'2026-06-21 23:59:27',NULL,NULL),(36,1,1,36,3,10.80,0.00,'2026-06-29',0,NULL,NULL,'2026-06-22 00:10:00',NULL,NULL);
 /*!40000 ALTER TABLE `receivables` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -905,6 +998,7 @@ CREATE TABLE `spaces` (
   `status` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0:空置 1:在租 2:维修 3:装修',
   `enterprise_name` varchar(100) DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at` datetime DEFAULT NULL COMMENT '软删除时间戳',
   PRIMARY KEY (`id`),
   KEY `idx_tenant_space` (`tenant_id`,`status`)
 ) ENGINE=InnoDB AUTO_INCREMENT=39 DEFAULT CHARSET=utf8mb4;
@@ -916,8 +1010,41 @@ CREATE TABLE `spaces` (
 
 LOCK TABLES `spaces` WRITE;
 /*!40000 ALTER TABLE `spaces` DISABLE KEYS */;
-INSERT INTO `spaces` VALUES (1,1,'京东大厦',1,'101',150.00,0.00,0.00,1,'拓普检测技术有限公司','2026-01-05 10:00:00'),(2,1,'京东大厦',1,'102',120.00,0.00,0.00,1,'华为技术有限公司','2026-01-05 10:00:00'),(3,1,'京东大厦',1,'103',158.00,0.00,0.00,0,NULL,'2026-01-05 10:00:00'),(4,1,'京东大厦',2,'201',158.00,0.00,0.00,0,NULL,'2026-01-05 10:00:00'),(5,1,'京东大厦',2,'202',1200.00,0.00,0.00,2,NULL,'2026-01-05 10:00:00'),(6,1,'腾讯大厦',1,'101',310.00,0.00,0.00,1,'美团科技有限公司','2026-01-05 10:00:00'),(7,1,'腾讯大厦',1,'102',180.00,0.00,0.00,1,'百度在线网络技术','2026-01-05 10:00:00'),(12,1,'测试',3,'302',158.00,0.00,0.00,0,NULL,'2026-06-20 00:11:44'),(13,1,'拓普大厦',1,'101',500.00,0.00,0.00,0,NULL,'2026-06-20 00:16:14'),(15,1,'拓普大厦',2,'202',2000.00,0.00,0.00,0,NULL,'2026-06-20 00:16:58'),(16,1,'拓普大厦',1,'102',1500.00,0.00,0.00,0,NULL,'2026-06-20 00:17:21'),(19,1,'拓普大厦',3,'301',2000.00,0.00,0.00,3,NULL,'2026-06-20 00:17:56'),(20,1,'拓普大厦',4,'401',200.00,0.00,0.00,2,NULL,'2026-06-20 00:18:08'),(21,1,'拓普大厦',4,'402',300.00,0.00,0.00,3,NULL,'2026-06-20 00:18:19'),(22,1,'拓普大厦',4,'403',400.00,0.00,0.00,0,NULL,'2026-06-20 00:18:32'),(23,1,'拓普大厦',4,'408',550.00,0.00,0.00,0,NULL,'2026-06-20 00:18:44'),(24,1,'拓普大厦',4,'405',550.00,0.00,0.00,0,NULL,'2026-06-20 00:19:00'),(25,1,'拓普大厦',5,'523',2000.00,0.00,0.00,0,NULL,'2026-06-20 00:28:19'),(26,1,'甬城公寓',1,'102',300.00,0.00,0.00,0,NULL,'2026-06-20 00:39:38'),(27,1,'甬城公寓',2,'2001',50.00,0.00,0.00,0,NULL,'2026-06-20 00:40:33'),(28,1,'甬城公寓',2,'2002',50.00,0.00,0.00,0,NULL,'2026-06-20 00:40:55'),(29,1,'甬城公寓',2,'2003',50.00,0.00,0.00,0,NULL,'2026-06-20 00:41:13'),(30,1,'甬城公寓',2,'2004',50.00,0.00,0.00,0,NULL,'2026-06-20 00:41:24'),(31,1,'甬城公寓',2,'2005',50.00,0.00,0.00,0,NULL,'2026-06-20 00:42:22'),(32,1,'甬城公寓',2,'2006',50.00,0.00,0.00,3,NULL,'2026-06-20 00:42:32'),(33,1,'甬城公寓',2,'2007',50.00,0.00,0.00,2,NULL,'2026-06-20 00:42:44'),(34,1,'甬城公寓',2,'2008',50.00,0.00,0.00,1,'张三','2026-06-20 00:42:58'),(35,1,'甬城公寓',2,'2009',50.00,0.00,0.00,0,NULL,'2026-06-20 00:43:07'),(36,1,'甬城公寓',2,'2010',50.00,0.00,0.00,1,'拓普检测技术有限公司','2026-06-20 00:43:18'),(37,1,'甬城公寓',2,'2011',50.00,0.00,0.00,0,NULL,'2026-06-20 00:43:30'),(38,1,'甬城公寓',1,'101',1700.00,0.00,0.00,1,'哆啦A梦有限公司','2026-06-20 00:43:57');
+INSERT INTO `spaces` VALUES (1,1,'京东大厦',1,'101',150.00,0.00,0.00,1,'拓普检测技术有限公司','2026-01-05 10:00:00',NULL),(2,1,'京东大厦',1,'102',120.00,0.00,0.00,1,'华为技术有限公司','2026-01-05 10:00:00',NULL),(3,1,'京东大厦',1,'103',158.00,0.00,0.00,0,NULL,'2026-01-05 10:00:00',NULL),(4,1,'京东大厦',2,'201',158.00,0.00,0.00,0,NULL,'2026-01-05 10:00:00',NULL),(5,1,'京东大厦',2,'202',1200.00,0.00,0.00,2,NULL,'2026-01-05 10:00:00',NULL),(6,1,'腾讯大厦',1,'101',310.00,0.00,0.00,1,'美团科技有限公司','2026-01-05 10:00:00',NULL),(7,1,'腾讯大厦',1,'102',180.00,0.00,0.00,1,'百度在线网络技术','2026-01-05 10:00:00',NULL),(12,1,'测试',3,'302',158.00,0.00,0.00,0,NULL,'2026-06-20 00:11:44',NULL),(13,1,'拓普大厦',1,'101',500.00,0.00,0.00,0,NULL,'2026-06-20 00:16:14',NULL),(15,1,'拓普大厦',2,'202',2000.00,0.00,0.00,0,NULL,'2026-06-20 00:16:58',NULL),(16,1,'拓普大厦',1,'102',1500.00,0.00,0.00,0,NULL,'2026-06-20 00:17:21',NULL),(19,1,'拓普大厦',3,'301',2000.00,0.00,0.00,3,NULL,'2026-06-20 00:17:56',NULL),(20,1,'拓普大厦',4,'401',200.00,0.00,0.00,2,NULL,'2026-06-20 00:18:08',NULL),(21,1,'拓普大厦',4,'402',300.00,0.00,0.00,3,NULL,'2026-06-20 00:18:19',NULL),(22,1,'拓普大厦',4,'403',400.00,0.00,0.00,0,NULL,'2026-06-20 00:18:32',NULL),(23,1,'拓普大厦',4,'408',550.00,0.00,0.00,0,NULL,'2026-06-20 00:18:44',NULL),(24,1,'拓普大厦',4,'405',550.00,0.00,0.00,0,NULL,'2026-06-20 00:19:00',NULL),(25,1,'拓普大厦',5,'523',2000.00,0.00,0.00,0,NULL,'2026-06-20 00:28:19',NULL),(26,1,'甬城公寓',1,'102',300.00,0.00,0.00,0,NULL,'2026-06-20 00:39:38',NULL),(27,1,'甬城公寓',2,'2001',50.00,0.00,0.00,0,NULL,'2026-06-20 00:40:33',NULL),(28,1,'甬城公寓',2,'2002',50.00,0.00,0.00,0,NULL,'2026-06-20 00:40:55',NULL),(29,1,'甬城公寓',2,'2003',50.00,0.00,0.00,0,NULL,'2026-06-20 00:41:13',NULL),(30,1,'甬城公寓',2,'2004',50.00,0.00,0.00,0,NULL,'2026-06-20 00:41:24',NULL),(31,1,'甬城公寓',2,'2005',50.00,0.00,0.00,0,NULL,'2026-06-20 00:42:22',NULL),(32,1,'甬城公寓',2,'2006',50.00,0.00,0.00,3,NULL,'2026-06-20 00:42:32',NULL),(33,1,'甬城公寓',2,'2007',50.00,0.00,0.00,2,NULL,'2026-06-20 00:42:44',NULL),(34,1,'甬城公寓',2,'2008',50.00,0.00,0.00,1,'张三','2026-06-20 00:42:58',NULL),(35,1,'甬城公寓',2,'2009',50.00,0.00,0.00,0,NULL,'2026-06-20 00:43:07',NULL),(36,1,'甬城公寓',2,'2010',50.00,0.00,0.00,1,'拓普检测技术有限公司','2026-06-20 00:43:18',NULL),(37,1,'甬城公寓',2,'2011',50.00,0.00,0.00,0,NULL,'2026-06-20 00:43:30',NULL),(38,1,'甬城公寓',1,'101',1700.00,0.00,0.00,1,'哆啦A梦有限公司','2026-06-20 00:43:57',NULL);
 /*!40000 ALTER TABLE `spaces` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `sys_attachments`
+--
+
+DROP TABLE IF EXISTS `sys_attachments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `sys_attachments` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `tenant_id` int(11) NOT NULL DEFAULT '1',
+  `uploader_type` varchar(20) NOT NULL COMMENT '上传端：admin/tenant/worker',
+  `uploader_id` int(11) NOT NULL DEFAULT '0' COMMENT '上传者ID',
+  `original_name` varchar(255) NOT NULL COMMENT '原始文件名',
+  `file_url` varchar(500) NOT NULL COMMENT '物理或云端访问路径',
+  `file_size` int(11) NOT NULL COMMENT '文件大小(Byte)',
+  `file_ext` varchar(20) NOT NULL COMMENT '文件后缀',
+  `mime_type` varchar(100) DEFAULT NULL COMMENT 'MIME类型',
+  `storage_driver` varchar(20) NOT NULL DEFAULT 'local' COMMENT '存储驱动：local/aliyun/tencent',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_tenant_driver` (`tenant_id`,`storage_driver`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='SaaS 全局附件与云存储资源中枢表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `sys_attachments`
+--
+
+LOCK TABLES `sys_attachments` WRITE;
+/*!40000 ALTER TABLE `sys_attachments` DISABLE KEYS */;
+/*!40000 ALTER TABLE `sys_attachments` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -991,12 +1118,14 @@ CREATE TABLE `work_orders` (
   `reporter_name` varchar(50) NOT NULL,
   `handler_id` int(11) DEFAULT NULL COMMENT '处理人(维修工)ID',
   `status` tinyint(1) NOT NULL DEFAULT '1' COMMENT '1:待指派 2:处理中 3:待验收 4:已结单',
+  `sla_breached` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'SLA是否违规超时(0:正常 1:接单超时 2:到场超时)',
   `priority` tinyint(1) DEFAULT '0' COMMENT '优先级：0-普通，1-紧急(P0)',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `accepted_at` datetime DEFAULT NULL COMMENT '接单时间戳',
   `arrived_at` datetime DEFAULT NULL COMMENT '到场打卡时间戳',
   `resolved_at` datetime DEFAULT NULL COMMENT '结单时间戳',
   `content` text COMMENT '工单详情/现场说明',
+  `material_cost` decimal(10,2) NOT NULL DEFAULT '0.00' COMMENT '工单消耗的物料总成本',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -1007,7 +1136,7 @@ CREATE TABLE `work_orders` (
 
 LOCK TABLES `work_orders` WRITE;
 /*!40000 ALTER TABLE `work_orders` DISABLE KEYS */;
-INSERT INTO `work_orders` VALUES (1,1,'腾讯大厦3楼男厕漏水','【现场照片证物】: /uploads/cert_6a35606a46647.jpg\n水管爆裂，漫出洗手间，请求紧急支援','腾讯技术部-陈主管',0,1,1,'2026-06-23 02:19:36',NULL,NULL,NULL,NULL),(2,1,'京东大厦C座电梯困人应急响应','监控室发现C座货梯卡在4-5楼之间，需立即进行安抚与物理救援\n[结单备注]: H5移动端打卡完工','中控室自动预警',102,4,1,'2026-06-23 01:39:36','2026-06-23 02:28:43',NULL,'2026-06-23 02:28:56',NULL),(3,1,'拓普检测实验室空调不制冷','内机出风口滴水，显示E4故障码','拓普检测-胡总',103,2,0,'2026-06-23 00:24:36','2026-06-23 00:34:36','2026-06-23 00:54:36',NULL,NULL),(4,1,'园区南门道闸被外来车辆撞损','货车倒车碰坏道闸栏杆，车辆已被门岗拦截，需定损','门岗室-老李',101,2,1,'2026-06-22 23:24:36','2026-06-23 00:24:36','2026-06-23 00:29:36',NULL,NULL),(5,1,'甬城公寓2层走廊呕吐物清理','周末租客醉酒，走廊地毯需进行深度清洁除味\n[结单备注]: H5移动端打卡完工，已使用洗地机清洗完毕并喷洒除味剂','公寓管家-小王',102,4,0,'2026-06-22 02:24:36','2026-06-22 03:24:36','2026-06-22 04:24:36','2026-06-22 05:24:36',NULL);
+INSERT INTO `work_orders` VALUES (1,1,'腾讯大厦3楼男厕漏水','【现场照片证物】: /uploads/cert_6a35606a46647.jpg\n水管爆裂，漫出洗手间，请求紧急支援','腾讯技术部-陈主管',0,1,0,1,'2026-06-23 02:19:36',NULL,NULL,NULL,NULL,0.00),(2,1,'京东大厦C座电梯困人应急响应','监控室发现C座货梯卡在4-5楼之间，需立即进行安抚与物理救援\n[结单备注]: H5移动端打卡完工','中控室自动预警',102,4,0,1,'2026-06-23 01:39:36','2026-06-23 02:28:43',NULL,'2026-06-23 02:28:56',NULL,0.00),(3,1,'拓普检测实验室空调不制冷','内机出风口滴水，显示E4故障码','拓普检测-胡总',103,2,0,0,'2026-06-23 00:24:36','2026-06-23 00:34:36','2026-06-23 00:54:36',NULL,NULL,0.00),(4,1,'园区南门道闸被外来车辆撞损','货车倒车碰坏道闸栏杆，车辆已被门岗拦截，需定损','门岗室-老李',101,2,0,1,'2026-06-22 23:24:36','2026-06-23 00:24:36','2026-06-23 00:29:36',NULL,NULL,0.00),(5,1,'甬城公寓2层走廊呕吐物清理','周末租客醉酒，走廊地毯需进行深度清洁除味\n[结单备注]: H5移动端打卡完工，已使用洗地机清洗完毕并喷洒除味剂','公寓管家-小王',102,4,0,0,'2026-06-22 02:24:36','2026-06-22 03:24:36','2026-06-22 04:24:36','2026-06-22 05:24:36',NULL,0.00);
 /*!40000 ALTER TABLE `work_orders` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1035,7 +1164,7 @@ CREATE TABLE `worker_notifications` (
 
 LOCK TABLES `worker_notifications` WRITE;
 /*!40000 ALTER TABLE `worker_notifications` DISABLE KEYS */;
-INSERT INTO `worker_notifications` VALUES (1,102,'物资发放入账提醒','您已从仓库成功登记发放 1 个 【拖把】。',0,'2026-06-21 15:26:28'),(7,102,'调度中心新任务派发','任务大厅有新下发的工单 [京东大厦C座电梯困人应急响应] 已指定由您负责，请前往现场处置并在 H5 完工打卡。',0,'2026-06-23 02:28:43');
+INSERT INTO `worker_notifications` VALUES (1,102,'物资发放入账提醒','您已从仓库成功登记发放 1 个 【拖把】。',0,'2026-06-21 15:26:28'),(7,102,'调度中心新任务派发','任务大厅有新下发的工单 [京东大厦C座电梯困人应急响应] 已指定由您负责，请前往现场处置并在 H5 完工打卡。',1,'2026-06-23 02:28:43');
 /*!40000 ALTER TABLE `worker_notifications` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1056,4 +1185,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-24 10:27:37
+-- Dump completed on 2026-06-24 20:47:25

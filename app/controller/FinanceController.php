@@ -6,224 +6,233 @@ use support\Db;
 
 class FinanceController
 {
+    // ==========================================
+    // 1. 应收账单分页大盘
+    // ==========================================
     public function receivableList(Request $request)
     {
-        $list = Db::table('receivables')
-            ->leftJoin('enterprises', 'receivables.enterprise_id', '=', 'enterprises.id')
-            ->leftJoin('spaces', 'receivables.space_id', '=', 'spaces.id')
-            ->select('receivables.*', 'enterprises.name as enterprise_name', 'spaces.building_name', 'spaces.room_number')
-            // 【优化排序逻辑】：严格按 "未结清浮顶，已结清沉底，再按最新生成时间排列"
-            ->orderByRaw("CASE WHEN receivables.is_paid = 1 THEN 1 ELSE 0 END")
-            ->orderBy('receivables.id', 'desc')
-            ->get();
-            
-        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
-    }
+        $page = (int)$request->get('page', 1);
+        $pageSize = (int)$request->get('limit', 15);
+        $tenantId = $request->tenantId ?? 1;
 
-    public function pay(Request $request)
-    {
-        $id = $request->post('id');
-        $action = $request->post('action', 'approve'); 
-        $rejectReason = $request->post('reject_reason', '凭证不清晰或金额不符');
+        $query = Db::table('receivables as r')
+            ->where('r.tenant_id', $tenantId)
+            ->leftJoin('enterprises as e', 'r.enterprise_id', '=', 'e.id')
+            ->leftJoin('spaces as s', 'r.space_id', '=', 's.id')
+            ->select('r.*', 'e.name as enterprise_name', 's.building_name', 's.room_number')
+            ->orderByRaw("CASE WHEN r.is_paid = 2 THEN 0 WHEN r.is_paid = 0 THEN 1 WHEN r.is_paid = 3 THEN 2 ELSE 3 END")
+            ->orderBy('r.due_date', 'asc');
 
-        $bill = Db::table('receivables')->where('id', $id)->first();
-        if (!$bill) return json(['code' => 404, 'msg' => '流水不存在']);
-
-        if ($action === 'reject') {
-            Db::table('receivables')->where('id', $id)->update([
-                'is_paid' => 3,
-                'reject_reason' => $rejectReason
-            ]);
-
-            Db::table('notifications')->insert([
-                'enterprise_id' => $bill->enterprise_id,
-                'title' => '打款凭证被驳回',
-                'content' => "您的账单(￥{$bill->amount})凭证被财务驳回。原因：{$rejectReason}。请重新上传。",
-                'is_read' => 0,
-                'created_at' => date('Y-m-d H:i:s')
-            ]);
-
-            \app\process\Websocket::sendToEnterprise($bill->enterprise_id, [
-                'type' => 'reject',
-                'msg' => '您的账单凭证刚刚被财务驳回，请重新补交！'
-            ]);
-
-            return json(['code' => 200, 'msg' => '凭证已驳回，系统将下发站内信通知租户']);
+        if ($request->get('enterprise_name')) {
+            $query->where('e.name', 'like', '%' . $request->get('enterprise_name') . '%');
         }
 
-        Db::table('receivables')->where('id', $id)->update([
-            'is_paid' => 1,
-            'paid_time' => date('Y-m-d H:i:s'),
-            'reject_reason' => null
-        ]);
-        
-        Db::table('notifications')->insert([
-            'enterprise_id' => $bill->enterprise_id,
-            'title' => '账单核销成功',
-            'content' => "您的账单(￥{$bill->amount})已完成财务核销结清。感谢您的配合。",
-            'is_read' => 0,
-            'created_at' => date('Y-m-d H:i:s')
-        ]);
+        $paginator = $query->paginate($pageSize, ['*'], 'page', $page);
 
-        \app\process\Websocket::sendToEnterprise($bill->enterprise_id, [
-            'type' => 'notification',
-            'msg' => "账单(￥{$bill->amount})已完成核销结清"
+        return json([
+            'code' => 200, 
+            'msg' => 'success', 
+            'data' => $paginator->items(),
+            'meta' => [
+                'total' => $paginator->total(),
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage()
+            ]
         ]);
-
-        return json(['code' => 200, 'msg' => '账款已确认到账，核销成功']);
     }
 
+    // ==========================================
+    // 2. 财务流水提取与智能核销引擎
+    // ==========================================
+    public function transactions(Request $request) 
+    {
+        $billId = $request->get('bill_id');
+        $tenantId = $request->tenantId ?? 1;
+        $list = Db::table('payment_transactions')
+            ->where('receivable_id', $billId)
+            ->where('tenant_id', $tenantId)
+            ->orderBy('id', 'desc')
+            ->get();
+        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
+    }
+
+    public function auditTransaction(Request $request) 
+    {
+        $transId = $request->post('transaction_id');
+        $status = $request->post('status'); // 1: 凭证无误确认核销, 2: 凭证异常驳回
+        $rejectReason = $request->post('reject_reason', '');
+        
+        Db::beginTransaction();
+        try {
+            $trans = Db::table('payment_transactions')->where('id', $transId)->lockForUpdate()->first();
+            if (!$trans || $trans->status != 0) {
+                Db::rollBack();
+                return json(['code' => 400, 'msg' => '拦截：该笔流水已被其他财务人员处理或不存在']);
+            }
+
+            $bill = Db::table('receivables')->where('id', $trans->receivable_id)->lockForUpdate()->first();
+
+            // 更新流水的生命周期
+            Db::table('payment_transactions')->where('id', $transId)->update([
+                'status' => $status,
+                'reject_reason' => $rejectReason,
+                'audit_time' => date('Y-m-d H:i:s')
+            ]);
+
+            if ($status == 1) {
+                // 核销通过，资金入账
+                $newPaid = $bill->paid_amount + $trans->pay_amount;
+                
+                // 智能判定该账单是否已全部结清
+                $isPaid = ($newPaid >= $bill->amount) ? 1 : ($bill->is_paid == 2 ? 0 : $bill->is_paid);
+                
+                // 防呆：如果没有其他待审核的流水，且账单没结清，恢复为未支付(0)
+                $pendingCount = Db::table('payment_transactions')->where('receivable_id', $bill->id)->where('status', 0)->count();
+                if ($isPaid != 1 && $pendingCount == 0) {
+                    $isPaid = 0; 
+                }
+
+                Db::table('receivables')->where('id', $bill->id)->update([
+                    'paid_amount' => $newPaid,
+                    'is_paid' => $isPaid,
+                    'paid_time' => $isPaid == 1 ? date('Y-m-d H:i:s') : $bill->paid_time,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+            } else {
+                // 驳回
+                $pendingCount = Db::table('payment_transactions')->where('receivable_id', $bill->id)->where('status', 0)->count();
+                if ($pendingCount == 0 && $bill->is_paid != 1) {
+                    Db::table('receivables')->where('id', $bill->id)->update([
+                        'is_paid' => 3, // 3代表有流水被驳回且需重新上传
+                        'reject_reason' => $rejectReason,
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ]);
+                }
+            }
+            
+            Db::commit();
+            return json(['code' => 200, 'msg' => '账务流水对账完毕，账单状态已自动同步']);
+        } catch (\Exception $e) {
+            Db::rollBack();
+            return json(['code' => 500, 'msg' => '核销失败：底层事务回滚']);
+        }
+    }
+
+    // ==========================================
+    // 3. 退租清算与能耗大盘
+    // ==========================================
     public function checkoutList(Request $request)
     {
-        $list = Db::table('checkouts')
-            ->leftJoin('contracts', 'checkouts.contract_id', '=', 'contracts.id')
-            ->leftJoin('enterprises', 'checkouts.enterprise_id', '=', 'enterprises.id')
-            ->leftJoin('spaces', 'contracts.space_id', '=', 'spaces.id')
-            ->select(
-                'checkouts.*',
-                'contracts.contract_no',
-                'enterprises.name as enterprise_name',
-                'spaces.building_name',
-                'spaces.room_number'
-            )
-            ->orderByRaw("CASE WHEN checkouts.status = 0 THEN 0 ELSE 1 END")
-            ->orderBy('checkouts.id', 'desc')
-            ->get();
-            
-        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
+        $page = (int)$request->get('page', 1);
+        $pageSize = (int)$request->get('limit', 15);
+        $tenantId = $request->tenantId ?? 1;
+
+        $query = Db::table('checkouts as c')
+            ->where('c.tenant_id', $tenantId)
+            ->leftJoin('enterprises as e', 'c.enterprise_id', '=', 'e.id')
+            ->leftJoin('contracts as ct', 'c.contract_id', '=', 'ct.id')
+            ->select('c.*', 'e.name as enterprise_name', 'ct.contract_no')
+            ->orderBy('c.status', 'asc')
+            ->orderBy('c.id', 'desc');
+
+        $paginator = $query->paginate($pageSize, ['*'], 'page', $page);
+
+        return json([
+            'code' => 200, 'msg' => 'success', 'data' => $paginator->items(),
+            'meta' => ['total' => $paginator->total()]
+        ]);
     }
 
     public function payCheckout(Request $request)
     {
         $id = $request->post('id');
-        Db::table('checkouts')->where('id', $id)->update([
-            'status' => 1,
-            'updated_at' => date('Y-m-d H:i:s')
-        ]);
-        return json(['code' => 200, 'msg' => '退租清算单已彻底核销，流程完美闭环']);
+        Db::table('checkouts')->where('id', $id)->update(['status' => 1, 'paid_time' => date('Y-m-d H:i:s')]);
+        return json(['code' => 200, 'msg' => '财务打款已结清']);
     }
 
     public function meterList(Request $request)
     {
-        $spaces = Db::table('spaces')
-            ->join('contracts', 'spaces.id', '=', 'contracts.space_id')
-            ->join('enterprises', 'contracts.enterprise_id', '=', 'enterprises.id')
-            ->where('contracts.status', 1)
-            ->select('spaces.id as space_id', 'spaces.building_name', 'spaces.room_number', 'enterprises.name as enterprise_name', 'contracts.enterprise_id')
-            ->get();
+        $page = (int)$request->get('page', 1);
+        $pageSize = (int)$request->get('limit', 15);
+        $tenantId = $request->tenantId ?? 1;
 
-        foreach ($spaces as $sp) {
-            $lastWater = Db::table('meters')->where('space_id', $sp->space_id)->where('meter_type', 1)->orderBy('id', 'desc')->first();
-            $sp->last_water = $lastWater ? floatval($lastWater->current_reading) : 0;
-            $sp->last_water_date = $lastWater ? date('Y-m-d H:i', strtotime($lastWater->created_at)) : '入驻初始底数';
+        $query = Db::table('spaces')
+            ->where('spaces.tenant_id', $tenantId)
+            ->where('spaces.status', '>', 0)
+            ->where('spaces.is_deleted', 0) // 过滤软删除的物理空间
+            ->leftJoin('contracts', function($join) {
+                $join->on('spaces.id', '=', 'contracts.space_id')
+                     ->where('contracts.status', '=', 1);
+            })
+            ->leftJoin('enterprises', 'contracts.enterprise_id', '=', 'enterprises.id')
+            ->select(
+                'spaces.id as space_id', 'spaces.building_name', 'spaces.room_number', 
+                'spaces.water_meter as current_water', 'spaces.electric_meter as current_electric',
+                'enterprises.id as enterprise_id', 'enterprises.name as enterprise_name'
+            )
+            ->orderBy('spaces.building_name')
+            ->orderBy('spaces.room_number');
 
-            $lastElec = Db::table('meters')->where('space_id', $sp->space_id)->where('meter_type', 2)->orderBy('id', 'desc')->first();
-            $sp->last_elec = $lastElec ? floatval($lastElec->current_reading) : 0;
-            $sp->last_elec_date = $lastElec ? date('Y-m-d H:i', strtotime($lastElec->created_at)) : '入驻初始底数';
-        }
-        
-        return json(['code' => 200, 'msg' => 'success', 'data' => $spaces]);
+        $paginator = $query->paginate($pageSize, ['*'], 'page', $page);
+
+        return json([
+            'code' => 200, 'msg' => 'success', 'data' => $paginator->items(),
+            'meta' => ['total' => $paginator->total()]
+        ]);
     }
 
     public function recordMeter(Request $request)
     {
         $spaceId = $request->post('space_id');
-        $entId = $request->post('enterprise_id');
-        $meterType = $request->post('meter_type'); 
-        $currentReading = floatval($request->post('current_reading'));
-        
-        $price = floatval($request->post('price', $meterType == 1 ? 5.5 : 1.2)); 
+        $enterpriseId = $request->post('enterprise_id');
+        $type = $request->post('type'); // 1水表 2电表
+        $newReading = $request->post('reading');
+        $month = $request->post('month', date('Y-m'));
 
-        $lastMeter = Db::table('meters')->where('space_id', $spaceId)->where('meter_type', $meterType)->orderBy('id', 'desc')->first();
-        $lastReading = $lastMeter ? floatval($lastMeter->current_reading) : 0;
+        $space = Db::table('spaces')->where('id', $spaceId)->first();
+        $oldReading = $type == 1 ? $space->water_meter : $space->electric_meter;
 
-        if ($currentReading < $lastReading) {
-            return json(['code' => 400, 'msg' => "业务拦截：本次读数({$currentReading}) 不能小于系统存档的上次底数({$lastReading})"]);
-        }
-
-        $usage = $currentReading - $lastReading;
-        if ($usage == 0) {
-            return json(['code' => 400, 'msg' => '本期用量为0，无需生成账单，请检查是否抄表有误']);
-        }
-
-        $amount = round($usage * $price, 2);
-        $currentTime = date('Y-m-d H:i:s');
+        if ($newReading < $oldReading) return json(['code' => 400, 'msg' => '新表底数不能小于旧表底数']);
 
         Db::beginTransaction();
         try {
+            $usage = $newReading - $oldReading;
             Db::table('meters')->insert([
-                'space_id' => $spaceId,
-                'meter_type' => $meterType,
-                'current_reading' => $currentReading,
-                'record_month' => date('Y-m'),
-                'created_at' => $currentTime
-            ]);
-            
-            Db::table('receivables')->insert([
-                'enterprise_id' => $entId,
-                'space_id' => $spaceId,
-                'bill_type' => $meterType == 1 ? 2 : 3, 
-                'amount' => $amount,
-                'due_date' => date('Y-m-d', strtotime('+7 days')), 
-                'is_paid' => 0,
-                'created_at' => $currentTime
+                'tenant_id' => $space->tenant_id, 'space_id' => $spaceId, 'meter_type' => $type,
+                'current_reading' => $newReading, 'last_reading' => $oldReading,
+                'usage_amount' => $usage, 'record_month' => $month, 'created_at' => date('Y-m-d H:i:s')
             ]);
 
-            Db::table('notifications')->insert([
-                'enterprise_id' => $entId,
-                'title' => '新账单出账提醒',
-                'content' => "您的能耗费账单(￥{$amount})已生成，请在截止日期前进入服务门户处理。",
-                'is_read' => 0,
-                'created_at' => $currentTime
-            ]);
+            $updateField = $type == 1 ? 'water_meter' : 'electric_meter';
+            Db::table('spaces')->where('id', $spaceId)->update([$updateField => $newReading]);
 
-            \app\process\Websocket::sendToEnterprise($entId, [
-                'type' => 'notification',
-                'msg' => "您有一笔新的能耗费账单(￥{$amount})出账，请及时处理"
-            ]);
+            if ($enterpriseId) {
+                $feeConfig = Db::table('system_configs')->where('config_key', 'fee_config')->value('config_value');
+                $rates = $feeConfig ? json_decode($feeConfig, true) : ['waterPrice' => 5.5, 'electricityPrice' => 1.2];
+                $price = $type == 1 ? $rates['waterPrice'] : $rates['electricityPrice'];
+                $amount = $usage * $price;
+                
+                if ($amount > 0) {
+                    Db::table('receivables')->insert([
+                        'tenant_id' => $space->tenant_id, 'enterprise_id' => $enterpriseId, 'space_id' => $spaceId,
+                        'bill_type' => $type == 1 ? 2 : 3, 'amount' => $amount, 'due_date' => date('Y-m-t'), 'created_at' => date('Y-m-d H:i:s')
+                    ]);
+                }
+            }
 
             Db::commit();
-            return json(['code' => 200, 'msg' => '抄表存档成功！已根据用量自动扣费生单，租户端将收到缴费提醒。']);
+            return json(['code' => 200, 'msg' => '抄表成功并已自动生成本期能耗账单']);
         } catch (\Exception $e) {
             Db::rollBack();
-            return json(['code' => 500, 'msg' => '抄表入账异常']);
+            return json(['code' => 500, 'msg' => '异常：' . $e->getMessage()]);
         }
     }
 
-    // 【核心亮点】：时间戳同源快照算法，完美溯源账单推送流向
     public function meterHistory(Request $request)
     {
         $spaceId = $request->get('space_id');
-        $meterType = $request->get('meter_type');
-        $billType = $meterType == 1 ? 2 : 3;
-        
-        $list = Db::table('meters')
-            ->where('space_id', $spaceId)
-            ->where('meter_type', $meterType)
-            ->orderBy('id', 'desc')
-            ->get();
-
-        foreach ($list as $item) {
-            // 利用时间戳找寻同一时刻（前后2秒内）系统触发的财务流水单
-            $timeStart = date('Y-m-d H:i:s', strtotime($item->created_at) - 2);
-            $timeEnd = date('Y-m-d H:i:s', strtotime($item->created_at) + 2);
-            
-            $bill = Db::table('receivables')
-                ->where('space_id', $spaceId)
-                ->where('bill_type', $billType)
-                ->whereBetween('created_at', [$timeStart, $timeEnd])
-                ->first();
-                
-            if ($bill) {
-                $ent = Db::table('enterprises')->where('id', $bill->enterprise_id)->first();
-                $item->billed_amount = $bill->amount;
-                $item->pushed_to = $ent ? $ent->name : '未知企业(或已销户)';
-            } else {
-                $item->billed_amount = 0;
-                $item->pushed_to = '';
-            }
-        }
-            
+        $type = $request->get('type');
+        $list = Db::table('meters')->where('space_id', $spaceId)->where('meter_type', $type)->orderBy('id', 'desc')->get();
         return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
 }
