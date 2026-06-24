@@ -20,7 +20,6 @@
     </div>
 
     <div v-show="activeTab === 'home'" class="h5-content floating-content" v-loading="overviewLoading">
-      
       <div v-if="pendingReturns.length > 0" class="responsibility-card" style="border: 1px solid #faecd8; background-color: #fdf6ec; margin-bottom: 15px;">
         <div class="resp-title" style="color: #e6a23c; margin-bottom: 12px;">
           <el-icon><Box /></el-icon> 待归还物资提醒 ({{ pendingReturns.length }} 件)
@@ -66,6 +65,30 @@
           <div class="info-line"><span>公文契约号：</span><span class="text-code">{{ contract.contract_no }}</span></div>
           <div class="info-line"><span>履约周期：</span><span style="font-size: 12px;">{{ contract.start_date }} ~ {{ contract.end_date }}</span></div>
           <div class="info-line"><span>空间独立月租：</span><span class="text-danger font-bold">¥{{ contract.monthly_rent }}</span></div>
+          
+          <div class="space-actions" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #ebeef5; text-align: right;">
+            <el-button size="small" type="primary" plain @click="openDecoDialog(contract)">
+              <el-icon style="margin-right: 4px"><Tools /></el-icon>发起装修报备
+            </el-button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="decoList.length > 0" class="responsibility-card" style="margin-bottom: 15px;">
+        <div class="resp-title" style="color: #409eff; margin-bottom: 12px;">
+          <el-icon><SetUp /></el-icon> 施工报备审核进度追踪
+        </div>
+        <div v-for="deco in decoList" :key="'deco-'+deco.id" class="quick-bill-item" style="display: block; padding: 10px 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-weight: bold; color: #303133;">{{ deco.building_name }}-{{ deco.room_number }}</span>
+            <el-tag size="small" :type="getDecoStatusTag(deco.status)" effect="dark">
+              {{ getDecoStatusText(deco.status) }}
+            </el-tag>
+          </div>
+          <div style="font-size: 12px; color: #909399; display: flex; justify-content: space-between;">
+            <span>工期: {{ deco.start_date }} ~ {{ deco.end_date }}</span>
+            <span>共 {{ deco.total_days }} 天</span>
+          </div>
         </div>
       </div>
 
@@ -131,10 +154,16 @@
       </div>
     </div>
 
-    <div v-show="activeTab === 'repair'" class="h5-content floating-content">
-      <div class="responsibility-card">
-        <div class="resp-title"><el-icon><Tools /></el-icon> 提交物业维保工单</div>
-        <el-form ref="repairFormRef" :model="repairForm" :rules="repairRules" label-position="top" style="margin-top: 15px;">
+    <div v-show="activeTab === 'service'" class="h5-content floating-content">
+      <div class="responsibility-card" style="padding-bottom: 10px;">
+        <div class="segmented-control">
+          <div :class="['seg-item', { active: serviceSubTab === 'repair' }]" @click="serviceSubTab = 'repair'">🛠️ 物业维保报修</div>
+          <div :class="['seg-item', { active: serviceSubTab === 'meeting' }]" @click="serviceSubTab = 'meeting'">📅 共享会议预订</div>
+        </div>
+      </div>
+
+      <div v-if="serviceSubTab === 'repair'" class="responsibility-card">
+        <el-form ref="repairFormRef" :model="repairForm" :rules="repairRules" label-position="top">
           <el-form-item label="故障简述 (必填)" prop="title">
             <el-input v-model="repairForm.title" placeholder="例如：空调不制冷、网络端口断网" size="large" />
           </el-form-item>
@@ -142,20 +171,41 @@
             <el-input v-model="repairForm.description" type="textarea" :rows="3" placeholder="请详述具体方位与故障表现..." />
           </el-form-item>
           <el-form-item label="故障现场照片 (推荐)">
-            <el-upload
-              class="cert-uploader"
-              action="http://47.120.52.65:8787/api/upload"
-              :headers="uploadHeaders"
-              :show-file-list="false"
-              :on-success="handleRepairUpload"
-              :before-upload="beforeUpload"
-            >
+            <el-upload class="cert-uploader" action="http://47.120.52.65:8787/api/upload" :headers="uploadHeaders" :show-file-list="false" :on-success="handleRepairUpload" :before-upload="beforeUpload">
               <img v-if="repairForm.image_url" :src="getFullImgUrl(repairForm.image_url)" class="preview-img" />
               <div v-else class="upload-trigger"><el-icon class="plus-icon"><Camera /></el-icon><div>点击拍照或选择照片</div></div>
             </el-upload>
           </el-form-item>
           <el-button type="primary" size="large" class="full-btn" style="margin-top: 10px;" :loading="repairLoading" @click="submitRepair">下发至调度室</el-button>
         </el-form>
+      </div>
+
+      <div v-if="serviceSubTab === 'meeting'">
+        <el-button type="primary" size="large" class="full-btn" @click="openMeetingDialog" style="margin-bottom: 15px; box-shadow: 0 4px 10px rgba(64,158,255,0.3);">发起新的会议室预订</el-button>
+        
+        <div class="responsibility-card title-card" style="padding: 12px 15px !important; margin-bottom: 10px;">
+          <span class="resp-title" style="margin:0;"><el-icon><Calendar /></el-icon> 我的历史预订记录</span>
+          <el-tag size="small" type="info" effect="plain">{{ meetingList.length }} 条追踪</el-tag>
+        </div>
+
+        <el-empty v-if="meetingList.length === 0" description="暂无预订记录" :image-size="60" class="responsibility-card" />
+        
+        <div v-for="mtg in meetingList" :key="mtg.id" class="bill-card" style="padding: 15px;">
+          <div class="bill-header" style="margin-bottom: 8px; padding-bottom: 8px;">
+            <span class="amount" style="font-size: 16px; color: #409eff;">{{ mtg.room_name }}</span>
+            <el-tag size="small" :type="getMeetingStatusTag(mtg.status)" effect="dark">{{ getMeetingStatusText(mtg.status) }}</el-tag>
+          </div>
+          <div class="bill-body" style="margin-bottom: 0;">
+            <div class="b-line" style="margin-bottom: 6px; font-weight: bold;">
+              <el-icon><Calendar /></el-icon> {{ mtg.date }} ( {{ mtg.start_time.substring(0,5) }} - {{ mtg.end_time.substring(0,5) }} )
+            </div>
+            <div class="b-line" style="margin-bottom: 6px; color: #606266; font-size: 13px;">会议主题：{{ mtg.topic }}</div>
+            <div class="b-line" style="display: flex; justify-content: space-between; margin-top: 8px; border-top: 1px dashed #ebeef5; padding-top: 8px;">
+              <span style="color: #909399; font-size: 12px;">系统核算费用</span>
+              <span class="text-danger font-bold">¥{{ mtg.cost }}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -206,7 +256,7 @@
     <div class="bottom-tabbar">
       <div :class="['tab-item', { active: activeTab === 'home' }]" @click="activeTab = 'home'"><el-icon><House /></el-icon><span>资产</span></div>
       <div :class="['tab-item', { active: activeTab === 'bills' }]" @click="activeTab = 'bills'"><el-icon><Wallet /></el-icon><span>账单</span></div>
-      <div :class="['tab-item', { active: activeTab === 'repair' }]" @click="activeTab = 'repair'"><el-icon><Tools /></el-icon><span>报修</span></div>
+      <div :class="['tab-item', { active: activeTab === 'service' }]" @click="activeTab = 'service'"><el-icon><Service /></el-icon><span>服务</span></div>
       <div :class="['tab-item', { active: activeTab === 'inventory' }]" @click="activeTab = 'inventory'"><el-icon><Box /></el-icon><span>物资</span></div>
       <div :class="['tab-item', { active: activeTab === 'profile' }]" @click="activeTab = 'profile'"><el-icon><User /></el-icon><span>我的</span></div>
     </div>
@@ -258,6 +308,70 @@
         </div>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="decoDialogVisible" title="提交装修进场申请" width="90%" center top="10vh" append-to-body>
+      <el-form ref="decoFormRef" :model="decoForm" label-position="top">
+        <el-form-item label="锁定的施工房源">
+          <el-input v-model="decoForm.space_name" disabled size="large" />
+        </el-form-item>
+        <el-form-item label="计划施工周期 (起 - 止)">
+          <el-date-picker v-model="decoForm.dateRange" type="daterange" range-separator="至" start-placeholder="进场" end-placeholder="完工" value-format="YYYY-MM-DD" size="large" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="施工负责人">
+          <el-input v-model="decoForm.manager" placeholder="如：张工 13800138000" size="large" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div style="display: flex; gap: 10px;">
+          <el-button @click="decoDialogVisible = false" size="large" style="flex: 1;">取消</el-button>
+          <el-button type="primary" size="large" :loading="decoLoading" @click="submitDeco" style="flex: 2;">提交中控室审核</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="meetingDialogVisible" title="共享会议室预订" width="90%" center top="5vh" append-to-body>
+      <el-form :model="meetingForm" label-position="top">
+        <el-form-item label="选择共享会议室 (支持阶梯计费)">
+          <el-select v-model="meetingForm.room_id" placeholder="查阅空间配置与计费规则" size="large" style="width: 100%">
+            <el-option v-for="rm in meetingRooms" :key="rm.id" :label="`${rm.name} (容纳${rm.capacity}人)`" :value="rm.id" style="height: auto; padding: 8px 15px;">
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: bold; color: #303133; line-height: 1.4;">{{ rm.name }} (容纳{{ rm.capacity }}人)</span>
+                <span style="color: #8492a6; font-size: 12px; line-height: 1.4;">
+                  <span v-if="rm.free_hours > 0" class="text-success" style="font-weight:bold;">前 {{ rm.free_hours }} 小时免费，</span>
+                  超出部分 ¥{{ rm.price_per_hour }}/小时
+                </span>
+              </div>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="使用日期">
+          <el-date-picker v-model="meetingForm.date" type="date" value-format="YYYY-MM-DD" placeholder="指定日期" size="large" style="width: 100%" />
+        </el-form-item>
+        <div style="display: flex; gap: 10px;">
+          <el-form-item label="开始时间" style="flex: 1">
+            <el-time-select v-model="meetingForm.start_time" start="08:00" step="00:30" end="22:00" placeholder="起始" size="large" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="结束时间" style="flex: 1">
+            <el-time-select v-model="meetingForm.end_time" start="08:30" step="00:30" end="22:30" placeholder="结束" size="large" style="width: 100%" />
+          </el-form-item>
+        </div>
+        <el-form-item label="会议主题与事由">
+          <el-input v-model="meetingForm.topic" placeholder="简要说明使用用途" size="large" />
+        </el-form-item>
+        
+        <div class="cost-preview-box">
+          <div class="cp-title">系统实时账单预估 (已自动抵扣免费时长)</div>
+          <div class="cp-amount">¥ {{ previewMeetingCost }}</div>
+        </div>
+      </el-form>
+      <template #footer>
+        <div style="display: flex; gap: 10px;">
+          <el-button @click="meetingDialogVisible = false" size="large" style="flex: 1;">取消</el-button>
+          <el-button type="primary" size="large" :loading="meetingLoading" @click="submitMeeting" style="flex: 2;">确认档期并预订</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -265,11 +379,12 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { House, Wallet, Tools, User, Timer, Camera, Plus, OfficeBuilding, Lock, SwitchButton, ArrowRight, Bell, WarningFilled, Warning, CircleCloseFilled, BellFilled, Close, Box } from '@element-plus/icons-vue'
+import { House, Wallet, Tools, User, Timer, Camera, Plus, OfficeBuilding, Lock, SwitchButton, ArrowRight, Bell, WarningFilled, Warning, CircleCloseFilled, BellFilled, Close, Box, SetUp, Service, Calendar } from '@element-plus/icons-vue'
 import request from '../../../utils/request'
 
 const router = useRouter()
 const activeTab = ref('home')
+const serviceSubTab = ref('repair') 
 const enterpriseId = ref(0)
 const enterpriseName = ref('')
 
@@ -278,6 +393,13 @@ const overviewLoading = ref(false)
 const bills = ref([])
 const billsLoading = ref(false)
 const inventoryList = ref([])
+const decoList = ref([]) 
+
+const meetingRooms = ref([])
+const meetingList = ref([])
+const meetingDialogVisible = ref(false)
+const meetingLoading = ref(false)
+const meetingForm = reactive({ room_id: null, date: '', start_time: '', end_time: '', topic: '' })
 
 const totalMonthlyRent = computed(() => {
   if (!overview.value.contracts || overview.value.contracts.length === 0) return 0
@@ -290,10 +412,7 @@ const totalDeposit = computed(() => {
 })
 
 const unpaidBills = computed(() => bills.value.filter(bill => Number(bill.is_paid) === 0 || Number(bill.is_paid) === 3))
-
-const pendingReturns = computed(() => {
-  return inventoryList.value.filter(inv => inv.action_type === 3)
-})
+const pendingReturns = computed(() => inventoryList.value.filter(inv => inv.action_type === 3))
 
 const msgDrawerVisible = ref(false)
 const msgLoading = ref(false)
@@ -316,7 +435,6 @@ const initSocket = () => {
       if (data.type === 'notification' || data.type === 'reject') {
         fetchMessages() 
         if (data.type === 'notification' && data.msg && data.msg.includes('物资')) fetchInventory()
-
         if (data.type === 'reject') {
           ElMessage.warning(data.msg || '有一笔账单凭证被驳回')
           fetchBills() 
@@ -369,6 +487,116 @@ const pwdRules = {
   new_password: [{ required: true, message: '不可为空', trigger: 'blur' }]
 }
 
+const decoDialogVisible = ref(false)
+const decoLoading = ref(false)
+const decoForm = reactive({ space_id: null, space_name: '', dateRange: [], manager: '' })
+
+const getDecoStatusText = (status) => ({ 0: '待审批', 1: '施工中', 2: '延期审核', 3: '已竣工', 4: '已驳回' }[status])
+const getDecoStatusTag = (status) => ({ 0: 'primary', 1: 'warning', 2: 'danger', 3: 'success', 4: 'info' }[status])
+
+const openDecoDialog = (contract) => {
+  decoForm.space_id = contract.space_id
+  decoForm.space_name = `${contract.building_name} - ${contract.room_number}`
+  decoForm.dateRange = []
+  decoForm.manager = ''
+  decoDialogVisible.value = true
+}
+
+const fetchDecorations = async () => {
+  if (!enterpriseId.value) return
+  try {
+    const res = await request.get('/api/tenant/decorations')
+    if (res.code === 200) decoList.value = res.data
+  } catch (e) {}
+}
+
+const submitDeco = async () => {
+  if (!decoForm.dateRange || decoForm.dateRange.length < 2) {
+    return ElMessage.error('请选择完整的施工起止时间')
+  }
+  decoLoading.value = true
+  try {
+    const res = await request.post('/api/tenant/decoration/apply', {
+      space_id: decoForm.space_id,
+      start_date: decoForm.dateRange[0],
+      end_date: decoForm.dateRange[1],
+      manager: decoForm.manager
+    })
+    if (res.code === 200) {
+      ElMessage.success(res.msg)
+      decoDialogVisible.value = false
+      fetchDecorations() 
+    } else {
+      ElMessage.error(res.msg)
+    }
+  } finally {
+    decoLoading.value = false
+  }
+}
+
+// ---------------- 会议室引擎 ----------------
+const getMeetingStatusText = (status) => ({ 0: '待审核', 1: '已通过', 2: '已驳回', 3: '已取消' }[status])
+const getMeetingStatusTag = (status) => ({ 0: 'primary', 1: 'success', 2: 'danger', 3: 'info' }[status])
+
+const fetchMeetingRooms = async () => {
+  try {
+    const res = await request.get('/api/tenant/meeting/rooms')
+    if (res.code === 200) meetingRooms.value = res.data
+  } catch (e) {}
+}
+
+const fetchMeetingList = async () => {
+  if (!enterpriseId.value) return
+  try {
+    const res = await request.get('/api/tenant/meeting/list')
+    if (res.code === 200) meetingList.value = res.data
+  } catch (e) {}
+}
+
+const openMeetingDialog = () => {
+  Object.assign(meetingForm, { room_id: null, date: '', start_time: '', end_time: '', topic: '' })
+  meetingDialogVisible.value = true
+}
+
+// 核心改动：前端同步抵扣免费时段
+const previewMeetingCost = computed(() => {
+  if (!meetingForm.room_id || !meetingForm.start_time || !meetingForm.end_time) return '0.00'
+  const room = meetingRooms.value.find(r => r.id === meetingForm.room_id)
+  if (!room) return '0.00'
+  
+  const start = new Date(`2000-01-01T${meetingForm.start_time}:00`)
+  const end = new Date(`2000-01-01T${meetingForm.end_time}:00`)
+  
+  const hours = (end - start) / 3600000
+  if (hours <= 0) return '0.00'
+  
+  // 提取配置的免费额度
+  const freeHours = room.free_hours ? parseFloat(room.free_hours) : 0
+  const billableHours = Math.max(0, hours - freeHours)
+  
+  return (billableHours * parseFloat(room.price_per_hour)).toFixed(2)
+})
+
+const submitMeeting = async () => {
+  if (!meetingForm.room_id || !meetingForm.date || !meetingForm.start_time || !meetingForm.end_time) {
+    return ElMessage.error('请将预订时间填写完整')
+  }
+  meetingLoading.value = true
+  try {
+    const res = await request.post('/api/tenant/meeting/apply', meetingForm)
+    if (res.code === 200) {
+      ElMessage.success(res.msg)
+      meetingDialogVisible.value = false
+      fetchMeetingList()
+    } else {
+      ElMessage.error(res.msg)
+    }
+  } finally {
+    meetingLoading.value = false
+  }
+}
+
+// ---------------- 底层支撑 ----------------
 const uploadHeaders = computed(() => ({ 'Authorization': `Bearer ${localStorage.getItem('h5_tenant_token')}` }))
 
 const initUserInfo = () => {
@@ -399,6 +627,9 @@ const fetchOverview = async () => {
         fetchMessages() 
         initSocket()
         fetchInventory()
+        fetchDecorations()
+        fetchMeetingRooms()
+        fetchMeetingList()
         
         const infoStr = localStorage.getItem('tenant_info')
         if (infoStr) {
@@ -525,6 +756,17 @@ onUnmounted(() => { if (socket) socket.close(); if (reconnectTimer) clearTimeout
 .reject-title { font-weight: bold; color: #f56c6c; margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
 .reject-msg { color: #f56c6c; font-size: 12px; }
 .full-btn { width: 100%; border-radius: 8px; font-weight: bold; letter-spacing: 1px; }
+
+/* 胶囊导航样式 */
+.segmented-control { display: flex; background: #ebeef5; border-radius: 8px; padding: 4px; }
+.seg-item { flex: 1; text-align: center; padding: 10px 0; border-radius: 6px; font-size: 14px; color: #606266; transition: all 0.3s; }
+.seg-item.active { background: #fff; color: #409eff; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+
+/* 会议室预估计费面板 */
+.cost-preview-box { margin-top: 15px; background: #fdf6ec; border: 1px solid #faecd8; padding: 15px; border-radius: 8px; text-align: center; }
+.cp-title { font-size: 13px; color: #e6a23c; margin-bottom: 5px; }
+.cp-amount { font-size: 26px; font-family: monospace; font-weight: bold; color: #f56c6c; }
+
 .profile-wrapper { padding: 0 15px; margin-top: -30px; position: relative; z-index: 10; }
 .profile-header { background: #fff; border-radius: 10px; padding: 25px 20px; display: flex; align-items: center; gap: 15px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }
 .profile-header .avatar { width: 60px; height: 60px; background: #e6f1fc; color: #409eff; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 30px; }
@@ -535,6 +777,7 @@ onUnmounted(() => { if (socket) socket.close(); if (reconnectTimer) clearTimeout
 .menu-item:last-child { border-bottom: none; }
 .menu-item .el-icon { margin-right: 10px; font-size: 18px; color: #909399; }
 .menu-item .arrow { margin-left: auto; color: #c0c4cc; margin-right: 0; }
+
 .bottom-tabbar { position: fixed; bottom: 0; left: 0; right: 0; max-width: 480px; margin: 0 auto; height: 55px; background: #fff; display: flex; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 100; border-top: 1px solid #ebeef5; }
 .tab-item { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #909399; font-size: 11px; cursor: pointer; }
 .tab-item .el-icon { font-size: 22px; margin-bottom: 3px; }

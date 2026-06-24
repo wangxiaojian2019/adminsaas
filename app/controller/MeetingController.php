@@ -6,93 +6,149 @@ use support\Db;
 
 class MeetingController
 {
+    // ==========================================
+    // 会议室资产管理 (PC后台使用)
+    // ==========================================
+
     public function roomList(Request $request)
     {
-        $rooms = Db::table('meeting_rooms')->get();
-        return json(['code' => 200, 'msg' => 'success', 'data' => $rooms]);
+        $list = Db::table('meeting_rooms')->orderBy('id', 'desc')->get();
+        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
+
+    public function roomAdd(Request $request)
+    {
+        $name = $request->post('name');
+        if (!$name) {
+            return json(['code' => 400, 'msg' => '会议室名称不能为空']);
+        }
+
+        Db::table('meeting_rooms')->insert([
+            'name' => $name,
+            'capacity' => intval($request->post('capacity', 10)),
+            'free_hours' => floatval($request->post('free_hours', 0)),
+            'price_per_hour' => floatval($request->post('price_per_hour', 0)),
+            'has_projector' => intval($request->post('has_projector', 0)),
+            'has_video_conf' => intval($request->post('has_video_conf', 0)),
+            'status' => $request->post('status', 'active'),
+            'created_at' => date('Y-m-d H:i:s')
+        ]);
+
+        return json(['code' => 200, 'msg' => '添加成功']);
+    }
+
+    public function roomUpdate(Request $request)
+    {
+        $id = $request->post('id');
+        if (!$id) {
+            return json(['code' => 400, 'msg' => '缺少ID']);
+        }
+
+        Db::table('meeting_rooms')->where('id', $id)->update([
+            'name' => $request->post('name'),
+            'capacity' => intval($request->post('capacity', 10)),
+            'free_hours' => floatval($request->post('free_hours', 0)),
+            'price_per_hour' => floatval($request->post('price_per_hour', 0)),
+            'has_projector' => intval($request->post('has_projector', 0)),
+            'has_video_conf' => intval($request->post('has_video_conf', 0)),
+            'status' => $request->post('status', 'active')
+        ]);
+
+        return json(['code' => 200, 'msg' => '更新成功']);
+    }
+
+    public function roomDelete(Request $request)
+    {
+        $id = $request->post('id');
+        $hasBooking = Db::table('meeting_bookings')->where('room_id', $id)->where('status', '<', 2)->exists();
+        if ($hasBooking) {
+            return json(['code' => 403, 'msg' => '该会议室存在未完结的预订记录，禁止删除，建议将其状态设为停用']);
+        }
+
+        Db::table('meeting_rooms')->where('id', $id)->delete();
+        return json(['code' => 200, 'msg' => '删除成功']);
+    }
+
+    // ==========================================
+    // 会议室预订订单审批与代客下单 (PC后台使用)
+    // ==========================================
 
     public function bookingList(Request $request)
     {
-        $bookings = Db::table('meeting_bookings')
-            ->join('meeting_rooms', 'meeting_bookings.room_id', '=', 'meeting_rooms.id')
-            ->select('meeting_bookings.*', 'meeting_rooms.name as room_name')
-            ->orderBy('meeting_bookings.id', 'desc')
+        // 强制使用 enterprise_id 联表查询企业真实名称
+        $list = Db::table('meeting_bookings as mb')
+            ->join('meeting_rooms as mr', 'mb.room_id', '=', 'mr.id')
+            ->leftJoin('enterprises as e', 'mb.enterprise_id', '=', 'e.id')
+            ->select('mb.*', 'mr.name as room_name', 'e.name as enterprise_name')
+            ->orderBy('mb.date', 'desc')
+            ->orderBy('mb.start_time', 'desc')
             ->get();
-        return json(['code' => 200, 'msg' => 'success', 'data' => $bookings]);
+
+        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
 
-    /**
-     * 预订会议室 (核心：防重叠算法与免额计费)
-     */
     public function apply(Request $request)
     {
-        $data = $request->post();
-        $roomId = $data['room_id'];
-        $date = $data['date'];
-        $startTime = $data['start_time'];
-        $endTime = $data['end_time'];
+        $enterpriseId = $request->post('enterprise_id');
+        $roomId = $request->post('room_id');
+        $date = $request->post('date');
+        $startTime = $request->post('start_time');
+        $endTime = $request->post('end_time');
+        $topic = $request->post('topic', '内部会议');
 
-        $room = Db::table('meeting_rooms')->where('id', $roomId)->first();
-        if (!$room) return json(['code' => 404, 'msg' => '会议室不存在']);
+        if (!$enterpriseId || !$roomId || !$date || !$startTime || !$endTime) {
+            return json(['code' => 400, 'msg' => '缺少必要的预订参数']);
+        }
+        if (strtotime($startTime) >= strtotime($endTime)) {
+            return json(['code' => 400, 'msg' => '逻辑错误：结束时间必须晚于开始时间']);
+        }
 
-        // 1. 防冲突重叠校验 (SQL层校验：同一天、同一房间、非驳回状态、时间有交集)
         $conflict = Db::table('meeting_bookings')
             ->where('room_id', $roomId)
             ->where('date', $date)
-            ->where('status', '!=', 2)
-            ->where(function($query) use ($startTime, $endTime) {
-                // 新开始时间 < 旧结束时间 AND 新结束时间 > 旧开始时间
-                $query->where('start_time', '<', $endTime)
-                      ->where('end_time', '>', $startTime);
-            })->first();
+            ->where('status', '<', 2)
+            ->where(function($q) use ($startTime, $endTime) {
+                $q->where('start_time', '<', $endTime)->where('end_time', '>', $startTime);
+            })->exists();
 
         if ($conflict) {
-            return json([
-                'code' => 409, 
-                'msg' => "时间冲突拦截！已被单号 {$conflict->booking_no} 占用 ({$conflict->start_time}-{$conflict->end_time})"
-            ]);
+            return json(['code' => 409, 'msg' => '时间冲突拦截：该时段会议室已被占用']);
         }
 
-        // 2. 计费引擎计算 (免首2小时逻辑)
-        $startTs = strtotime("{$date} {$startTime}:00");
-        $endTs = strtotime("{$date} {$endTime}:00");
-        $duration = round(($endTs - $startTs) / 3600, 1);
-        
-        if ($duration <= 0) return json(['code' => 400, 'msg' => '结束时间必须大于开始时间']);
+        $room = Db::table('meeting_rooms')->where('id', $roomId)->first();
+        $durationHours = round((strtotime($endTime) - strtotime($startTime)) / 3600, 1);
+        $freeHours = isset($room->free_hours) ? floatval($room->free_hours) : 0;
+        $billableHours = max(0, $durationHours - $freeHours);
+        $cost = $billableHours * $room->price_per_hour;
 
-        $chargeableHours = max(0, $duration - 2); // 减去2小时免费额度
-        $cost = round($chargeableHours * $room->price_per_hour, 2);
-
-        // 3. 落地落盘
-        $bookingNo = 'MT' . date('YmdHis') . rand(10, 99);
         Db::table('meeting_bookings')->insert([
-            'booking_no' => $bookingNo,
-            'enterprise_name' => $data['enterprise_name'],
+            'booking_no' => 'MR' . date('YmdHis') . rand(100, 999),
+            'enterprise_id' => $enterpriseId,
             'room_id' => $roomId,
             'date' => $date,
             'start_time' => $startTime,
             'end_time' => $endTime,
-            'duration' => $duration,
+            'duration' => $durationHours,
             'cost' => $cost,
-            'topic' => $data['topic'] ?? '',
-            'status' => 0,
+            'topic' => $topic,
+            'status' => 0, 
             'created_at' => date('Y-m-d H:i:s')
         ]);
 
-        return json(['code' => 200, 'msg' => "预订成功。总时长{$duration}H, 系统扣减免额后计费 ￥{$cost}"]);
+        return json(['code' => 200, 'msg' => '代客预订成功']);
     }
 
-    /**
-     * 审核预订 (核心：联动财务账单)
-     */
     public function audit(Request $request)
     {
         $id = $request->post('id');
-        $status = $request->post('status'); // 1:同意, 2:驳回
+        $status = $request->post('status');
+
+        if (!in_array($status, [1, 2, 3])) {
+            return json(['code' => 400, 'msg' => '非法状态值']);
+        }
 
         $booking = Db::table('meeting_bookings')->where('id', $id)->first();
-        if (!$booking) return json(['code' => 404, 'msg' => '记录不存在']);
+        if (!$booking) return json(['code' => 404, 'msg' => '未找到该预订记录']);
 
         Db::beginTransaction();
         try {
@@ -101,31 +157,25 @@ class MeetingController
                 'updated_at' => date('Y-m-d H:i:s')
             ]);
 
-            $msg = '操作成功';
-            
-            // 业财联动：如果同意并且产生了费用，自动向财务中心生单
             if ($status == 1 && $booking->cost > 0) {
-                // 查找企业ID (此处为严谨，需联查enterprises表。为演示全流程闭环，我们直接写入财务流水)
-                $ent = Db::table('enterprises')->where('name', $booking->enterprise_name)->first();
-                $entId = $ent ? $ent->id : 0; // 若无匹配视为散客记0
-                
                 Db::table('receivables')->insert([
-                    'enterprise_id' => $entId,
+                    'tenant_id' => 1, 
+                    'enterprise_id' => $booking->enterprise_id,
                     'space_id' => 0,
-                    'bill_type' => 4, // 设定 4 为 共享空间预订费
+                    'bill_type' => 4, // 4代表场地服务费
                     'amount' => $booking->cost,
-                    'due_date' => date('Y-m-d', strtotime('+3 days')),
                     'is_paid' => 0,
+                    'due_date' => date('Y-m-d', strtotime('+7 days')),
+                    'remark' => "共享会议室使用费({$booking->date} {$booking->start_time}-{$booking->end_time})",
                     'created_at' => date('Y-m-d H:i:s')
                 ]);
-                $msg = "预订已批准！因产生￥{$booking->cost}费用，已自动向业财中心推送应收账款。";
             }
 
             Db::commit();
-            return json(['code' => 200, 'msg' => $msg]);
+            return json(['code' => 200, 'msg' => '审核操作已完成，资金流已同步']);
         } catch (\Exception $e) {
             Db::rollBack();
-            return json(['code' => 500, 'msg' => '执行异常: ' . $e->getMessage()]);
+            return json(['code' => 500, 'msg' => '系统异常：' . $e->getMessage()]);
         }
     }
 }

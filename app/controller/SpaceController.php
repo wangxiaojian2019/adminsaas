@@ -16,6 +16,7 @@ class SpaceController
             ->leftJoin('enterprises', 'contracts.enterprise_id', '=', 'enterprises.id')
             ->select(
                 'spaces.*', 
+                'enterprises.id as enterprise_id', // 核心补全：输出所属企业外键ID供前端级联过滤
                 'enterprises.name as real_enterprise_name', 
                 'enterprises.contact_person', 
                 'enterprises.phone',

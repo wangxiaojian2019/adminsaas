@@ -87,13 +87,20 @@
     <el-dialog title="新建企业装修进场报备单" v-model="applyVisible" width="550px">
       <el-form :model="applyForm" label-width="110px">
         <el-form-item label="选择企业">
-          <el-input v-model="applyForm.enterprise_name" placeholder="请输入企业全称" />
+          <el-select v-model="applyForm.enterprise_id" @change="handleEnterpriseChange" placeholder="请搜索并选择企业" filterable style="width: 100%">
+            <el-option v-for="item in enterpriseList" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
         </el-form-item>
         <el-form-item label="施工房间">
-          <el-input v-model="applyForm.room_info" placeholder="如：A栋-1203室" />
+          <el-select v-model="applyForm.space_id" placeholder="请先选择企业，系统将自动加载其名下房源" filterable style="width: 100%" :disabled="!applyForm.enterprise_id">
+            <el-option v-for="item in filteredSpaceList" :key="item.id" :label="`${item.building_name}-${item.floor}F-${item.room_number}`" :value="item.id">
+              <span style="float: left">{{ item.building_name }}-{{ item.floor }}F-{{ item.room_number }}</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">{{ item.enterprise_name }}</span>
+            </el-option>
+          </el-select>
         </el-form-item>
         <el-form-item label="计划工期">
-          <el-date-picker v-model="applyForm.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" @change="calculateFormDays" />
+          <el-date-picker v-model="applyForm.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" @change="calculateFormDays" style="width: 100%" />
         </el-form-item>
         <el-form-item label="系统预算天数">
           <el-input v-model="applyForm.total_days" disabled style="width: 120px"><template #append>天</template></el-input>
@@ -117,7 +124,7 @@
           <el-input v-model="delayForm.old_end_date" disabled />
         </el-form-item>
         <el-form-item label="拟申请延期至">
-          <el-date-picker v-model="delayForm.new_end_date" type="date" value-format="YYYY-MM-DD" placeholder="新结束日期" />
+          <el-date-picker v-model="delayForm.new_end_date" type="date" value-format="YYYY-MM-DD" placeholder="新结束日期" style="width: 100%" />
         </el-form-item>
         <el-form-item label="延期原因说明">
           <el-input v-model="delayForm.reason" type="textarea" placeholder="填写物料迟滞或特殊施工工艺说明" />
@@ -132,10 +139,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import request from '@/utils/request' // 全局引入封装的 request (走后端真实接口)
+import request from '@/utils/request'
 
 const loading = ref(false)
 const applyVisible = ref(false)
@@ -143,14 +150,27 @@ const delayVisible = ref(false)
 
 const stats = ref({ pending: 0, building: 0, delaying: 0, finished: 0 })
 const tableData = ref([])
+const enterpriseList = ref([]) 
+const spaceList = ref([]) 
+
 const queryForm = ref({ entName: '', status: '' })
-const applyForm = ref({ enterprise_name: '', room_info: '', dateRange: [], total_days: 0, deposit: 5000, manager: '' })
+const applyForm = ref({ enterprise_id: null, space_id: null, dateRange: [], total_days: 0, deposit: 5000, manager: '' })
 const delayForm = ref({ id: null, old_end_date: '', new_end_date: '', reason: '' })
 
 const getStatusText = (status) => ({ 0: '待审核', 1: '施工中', 2: '延期审核中', 3: '已完工', 4: '已驳回' }[status])
 const getStatusTag = (status) => ({ 0: 'primary', 1: 'warning', 2: 'danger', 3: 'success', 4: 'info' }[status])
 
-// 真实接口：获取列表与统计面板数据
+// 通过计算属性实现级联过滤：仅展示所选企业名下的房源资产
+const filteredSpaceList = computed(() => {
+  if (!applyForm.value.enterprise_id) return []
+  return spaceList.value.filter(space => space.enterprise_id === applyForm.value.enterprise_id)
+})
+
+// 当重新选择企业时，必须防备性清空下层房源ID，防止幽灵数据提交
+const handleEnterpriseChange = () => {
+  applyForm.value.space_id = null
+}
+
 const fetchList = async () => {
   loading.value = true
   try {
@@ -164,7 +184,23 @@ const fetchList = async () => {
   }
 }
 
-onMounted(() => fetchList())
+const fetchDictData = async () => {
+  try {
+    const [entRes, spaceRes] = await Promise.all([
+      request.get('/api/enterprises/list'),
+      request.get('/api/spaces/list')
+    ])
+    if (entRes.code === 200) enterpriseList.value = entRes.data
+    if (spaceRes.code === 200) spaceList.value = spaceRes.data
+  } catch (e) {
+    console.error('字典数据加载失败', e)
+  }
+}
+
+onMounted(() => {
+  fetchList()
+  fetchDictData()
+})
 
 const calculateFormDays = (val) => {
   if (val && val.length === 2) {
@@ -176,38 +212,45 @@ const calculateFormDays = (val) => {
 }
 
 const openApplyDialog = () => {
-  applyForm.value = { enterprise_name: '', room_info: '', dateRange: [], total_days: 0, deposit: 5000, manager: '' }
+  applyForm.value = { enterprise_id: null, space_id: null, dateRange: [], total_days: 0, deposit: 5000, manager: '' }
   applyVisible.value = true
 }
 
-// 真实接口：提交报备
 const submitApply = async () => {
-  if (!applyForm.value.enterprise_name || applyForm.value.total_days <= 0) {
-    return ElMessage.error('请填写完整的报备信息')
+  if (!applyForm.value.enterprise_id || !applyForm.value.space_id || applyForm.value.total_days <= 0) {
+    return ElMessage.error('请按照级联顺序选择企业与房源，并填写完整工期')
   }
-  const res = await request.post('/api/v1/decoration/apply', applyForm.value)
+  
+  const payload = {
+    enterprise_id: applyForm.value.enterprise_id,
+    space_id: applyForm.value.space_id,
+    start_date: applyForm.value.dateRange[0],
+    end_date: applyForm.value.dateRange[1],
+    deposit: applyForm.value.deposit,
+    manager: applyForm.value.manager
+  }
+
+  const res = await request.post('/api/v1/decoration/apply', payload)
   if (res.code === 200) {
     ElMessage.success(res.msg)
     applyVisible.value = false
-    fetchList() // 刷新大盘
+    fetchList()
   }
 }
 
-// 真实接口：审批流程
 const auditAction = async (id, targetStatus) => {
   const res = await request.post('/api/v1/decoration/audit', { id, status: targetStatus })
   if (res.code === 200) {
     ElMessage.success(res.msg)
-    fetchList() // 刷新大盘
+    fetchList()
   } else {
     ElMessage.error(res.msg || '操作失败')
   }
 }
 
-// 真实接口：完工触发工单联动
 const triggerEarlyFinish = (row) => {
-  ElMessageBox.confirm(`系统将同步在外勤工单生成【工程验收工单】，是否派发？`, '验收确认', { type: 'info' }).then(() => {
-    auditAction(row.id, 3) // 状态3触发后端联动发单
+  ElMessageBox.confirm(`系统将同步资产物理状态并恢复计费，确认验收通过？`, '验收确认', { type: 'info' }).then(() => {
+    auditAction(row.id, 3) 
   })
 }
 
@@ -216,14 +259,13 @@ const openDelayDialog = (row) => {
   delayVisible.value = true
 }
 
-// 真实接口：提交延期
 const submitDelay = async () => {
   if (!delayForm.value.new_end_date) return ElMessage.error('请选择延期日期')
   const res = await request.post('/api/v1/decoration/delay', delayForm.value)
   if (res.code === 200) {
     ElMessage.warning(res.msg)
     delayVisible.value = false
-    fetchList() // 刷新大盘
+    fetchList()
   }
 }
 </script>

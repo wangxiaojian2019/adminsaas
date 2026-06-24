@@ -12,17 +12,13 @@ Route::options('[{path:.+}]', function () {
     ]);
 });
 
-// 登录模块
 Route::post('/api/login', [app\controller\LoginController::class, 'login']);
 Route::post('/api/tenant/login', [app\controller\LoginController::class, 'tenantLogin']);
 
 Route::group('/api', function () {
     
-    // 菜单与仪表盘
     Route::get('/system/getMyMenus', [app\controller\SystemController::class, 'getMyMenus']);
     Route::get('/dashboard', [app\controller\DashboardController::class, 'index']);
-    
-    // 系统权限与管理员
     Route::get('/system/roles/list', [app\controller\SystemController::class, 'roleList']);
     Route::post('/system/roles/add', [app\controller\SystemController::class, 'roleAdd']);
     Route::post('/system/roles/update', [app\controller\SystemController::class, 'roleUpdate']);
@@ -31,12 +27,9 @@ Route::group('/api', function () {
     Route::post('/system/admins/add', [app\controller\SystemController::class, 'adminAdd']);
     Route::post('/system/admins/update', [app\controller\SystemController::class, 'adminUpdate']); 
     Route::post('/system/admins/delete', [app\controller\SystemController::class, 'adminDelete']); 
-    
-    // 数据导出
     Route::get('/export/download', [app\controller\ExportController::class, 'download']);
     Route::get('/system/audit/logs', [app\controller\ExportController::class, 'auditLogs']);
     
-    // 楼宇与空间房源资产
     Route::get('/buildings/list', [app\controller\BuildingController::class, 'list']);
     Route::post('/buildings/add', [app\controller\BuildingController::class, 'add']);
     Route::get('/spaces/list', [app\controller\SpaceController::class, 'list']);
@@ -46,25 +39,20 @@ Route::group('/api', function () {
     Route::post('/spaces/status', [app\controller\SpaceController::class, 'updateStatus']);
     Route::get('/v1/assets/tree', [app\controller\SpaceController::class, 'tree']);
     
-    // 车辆管理
     Route::get('/vehicles/list', [app\controller\VehicleController::class, 'list']);
     Route::post('/vehicles/add', [app\controller\VehicleController::class, 'add']);
     Route::post('/vehicles/renew', [app\controller\VehicleController::class, 'renew']);
     Route::post('/vehicles/delete', [app\controller\VehicleController::class, 'delete']);
     
-    // 招商线索与公海
     Route::get('/leads/list', [app\controller\LeadController::class, 'list']);
     Route::post('/leads/add', [app\controller\LeadController::class, 'add']);
-    Route::post('/leads/claim', [app\controller\LeadController::class, 'claim']); 
     Route::get('/leads/follow/list', [app\controller\LeadController::class, 'followList']);
     Route::post('/leads/follow/add', [app\controller\LeadController::class, 'followAdd']);
     
-    // 企业户籍
     Route::get('/enterprises/list', [app\controller\EnterpriseController::class, 'list']);
     Route::post('/enterprises/add', [app\controller\EnterpriseController::class, 'add']);
     Route::post('/enterprises/reset_pwd', [app\controller\EnterpriseController::class, 'resetPwd']);
-
-    // 合同中心
+    
     Route::get('/contracts/list', [app\controller\ContractController::class, 'list']);
     Route::post('/contracts/add', [app\controller\ContractController::class, 'add']);
     Route::post('/contracts/terminate', [app\controller\ContractController::class, 'terminate']);
@@ -74,7 +62,6 @@ Route::group('/api', function () {
     Route::post('/contracts/alter', [app\controller\ContractController::class, 'alterContract']);
     Route::get('/contracts/history', [app\controller\ContractController::class, 'history']);
     
-    // 财务收支与能耗
     Route::get('/finance/receivables/list', [app\controller\FinanceController::class, 'receivableList']);
     Route::post('/finance/receivables/pay', [app\controller\FinanceController::class, 'pay']);
     Route::get('/finance/checkouts/list', [app\controller\FinanceController::class, 'checkoutList']);
@@ -83,12 +70,51 @@ Route::group('/api', function () {
     Route::post('/finance/meters/record', [app\controller\FinanceController::class, 'recordMeter']);
     Route::get('/finance/meterHistory', [app\controller\FinanceController::class, 'meterHistory']);
     
-    // 统计报表
     Route::get('/reports/finance', [app\controller\ReportController::class, 'financeStats']);
     Route::get('/reports/leads', [app\controller\ReportController::class, 'leadStats']);
     Route::get('/reports/assets', [app\controller\ReportController::class, 'assetStats']);
     
-    // 租户H5门户
+    Route::get('/patrol/points/list', [app\controller\PatrolController::class, 'pointList']);
+    Route::post('/patrol/points/add', [app\controller\PatrolController::class, 'pointAdd']);
+    Route::post('/patrol/checkin', [app\controller\PatrolController::class, 'checkin']);
+    Route::get('/patrol/records', [app\controller\PatrolController::class, 'records']);
+    
+    Route::get('/work_order/list', [app\controller\WorkOrderController::class, 'list']);
+    Route::post('/work_order/add', [app\controller\WorkOrderController::class, 'add']);
+    Route::post('/work_order/action', [app\controller\WorkOrderController::class, 'action']);
+    
+    Route::get('/services/staff/list', [app\controller\ServiceStaffController::class, 'list']);
+    Route::post('/services/staff/add', [app\controller\ServiceStaffController::class, 'add']);
+    Route::post('/services/staff/update', [app\controller\ServiceStaffController::class, 'update']);
+    Route::post('/services/staff/delete', [app\controller\ServiceStaffController::class, 'delete']);
+    Route::post('/upload', [app\controller\UploadController::class, 'upload']);
+    Route::get('/notification/list', [app\controller\NotificationController::class, 'list']);
+    Route::post('/notification/read', [app\controller\NotificationController::class, 'read']);
+    
+    Route::get('/v1/decoration/list', [app\controller\DecorationController::class, 'list']);
+    Route::post('/v1/decoration/apply', [app\controller\DecorationController::class, 'apply']);
+    Route::post('/v1/decoration/audit', [app\controller\DecorationController::class, 'audit']);
+    Route::post('/v1/decoration/delay', [app\controller\DecorationController::class, 'applyDelay']);
+    
+    Route::get('/v1/inventory/list', [app\controller\InventoryController::class, 'stockList']);
+    Route::get('/v1/inventory/logs', [app\controller\InventoryController::class, 'outLogs']);
+    Route::post('/v1/inventory/inbound', [app\controller\InventoryController::class, 'inbound']);
+    Route::post('/v1/inventory/outbound', [app\controller\InventoryController::class, 'outbound']);
+    
+    // PC 后台：会议室资产增删改查及订单审批
+    Route::get('/v1/meeting/rooms/list', [app\controller\MeetingController::class, 'roomList']);
+    Route::post('/v1/meeting/rooms/add', [app\controller\MeetingController::class, 'roomAdd']);
+    Route::post('/v1/meeting/rooms/update', [app\controller\MeetingController::class, 'roomUpdate']);
+    Route::post('/v1/meeting/rooms/delete', [app\controller\MeetingController::class, 'roomDelete']);
+    Route::get('/v1/meeting/list', [app\controller\MeetingController::class, 'bookingList']);
+    Route::post('/v1/meeting/audit', [app\controller\MeetingController::class, 'audit']);
+    
+    Route::get('/v1/fee-config/get', [app\controller\FeeConfigController::class, 'get']);
+    Route::post('/v1/fee-config/save', [app\controller\FeeConfigController::class, 'save']);
+    Route::get('/v1/iot/list', [app\controller\IotController::class, 'list']);
+    Route::post('/v1/iot/control', [app\controller\IotController::class, 'control']);
+
+    // 租户 H5 门户
     Route::get('/tenant/overview', [app\controller\TenantPortalController::class, 'getOverview']);
     Route::get('/tenant/bills', [app\controller\TenantPortalController::class, 'getBills']);
     Route::get('/tenant/contracts', [app\controller\TenantPortalController::class, 'getContracts']);
@@ -96,8 +122,13 @@ Route::group('/api', function () {
     Route::post('/tenant/order/submit', [app\controller\TenantPortalController::class, 'submitOrder']); 
     Route::post('/tenant/password/update', [app\controller\TenantPortalController::class, 'updatePassword']); 
     Route::get('/tenant/inventory', [app\controller\TenantPortalController::class, 'getInventory']);
+    Route::get('/tenant/decorations', [app\controller\TenantPortalController::class, 'getDecorations']);
+    Route::post('/tenant/decoration/apply', [app\controller\TenantPortalController::class, 'applyDecoration']);
+    Route::get('/tenant/meeting/rooms', [app\controller\TenantPortalController::class, 'getMeetingRooms']);
+    Route::get('/tenant/meeting/list', [app\controller\TenantPortalController::class, 'getMyMeetings']);
+    Route::post('/tenant/meeting/apply', [app\controller\TenantPortalController::class, 'applyMeeting']);
 
-    // 员工H5门户
+    // 员工 H5 门户
     Route::get('/worker/tasks', [app\controller\WorkerPortalController::class, 'getTasks']);
     Route::post('/worker/tasks/complete', [app\controller\WorkerPortalController::class, 'completeTask']);
     Route::get('/worker/patrol/points', [app\controller\WorkerPortalController::class, 'getPatrolPoints']);
@@ -106,65 +137,6 @@ Route::group('/api', function () {
     Route::get('/worker/inventory', [app\controller\WorkerPortalController::class, 'getInventory']);
     Route::get('/worker/notifications', [app\controller\WorkerPortalController::class, 'getNotifications']);
     Route::post('/worker/notifications/read', [app\controller\WorkerPortalController::class, 'readNotification']);
-    
-    // 巡更管理
-    Route::get('/patrol/points/list', [app\controller\PatrolController::class, 'pointList']);
-    Route::post('/patrol/points/add', [app\controller\PatrolController::class, 'pointAdd']);
-    Route::post('/patrol/checkin', [app\controller\PatrolController::class, 'checkin']);
-    Route::get('/patrol/records', [app\controller\PatrolController::class, 'records']);
-    
-    // 外勤工单大盘核心引擎
-    Route::get('/work_order/list', [app\controller\WorkOrderController::class, 'list']);
-    Route::post('/work_order/add', [app\controller\WorkOrderController::class, 'add']);
-    Route::post('/work_order/action', [app\controller\WorkOrderController::class, 'action']);
-    
-    // 物业服务基层员工
-    Route::get('/services/staff/list', [app\controller\ServiceStaffController::class, 'list']);
-    Route::post('/services/staff/add', [app\controller\ServiceStaffController::class, 'add']);
-    Route::post('/services/staff/update', [app\controller\ServiceStaffController::class, 'update']);
-    Route::post('/services/staff/delete', [app\controller\ServiceStaffController::class, 'delete']);
-
-    // 通用上传
-    Route::post('/upload', [app\controller\UploadController::class, 'upload']);
-
-    // 站内信
-    Route::get('/notification/list', [app\controller\NotificationController::class, 'list']);
-    Route::post('/notification/read', [app\controller\NotificationController::class, 'read']);
-
-    // =================================================================
-    // ↓ 完美嵌入的新增高阶业务模块 (含装修、进销存、会议室、计费、IoT) ↓
-    // =================================================================
-
-    // 1. 装修报备与工期流转系统
-    Route::get('/v1/decoration/list', [app\controller\DecorationController::class, 'list']);
-    Route::post('/v1/decoration/apply', [app\controller\DecorationController::class, 'apply']);
-    Route::post('/v1/decoration/audit', [app\controller\DecorationController::class, 'audit']);
-    Route::post('/v1/decoration/delay', [app\controller\DecorationController::class, 'applyDelay']);
-
-    // 2. 仓库与进销存管理系统 (保留了您的旧版路由防止报错，并新增v1高阶接口)
-    Route::get('/inventory/list', [app\controller\InventoryController::class, 'list']);
-    Route::post('/inventory/add', [app\controller\InventoryController::class, 'add']);
-    Route::post('/inventory/action', [app\controller\InventoryController::class, 'action']);
-    Route::get('/inventory/records', [app\controller\InventoryController::class, 'records']);
-    
-    Route::get('/v1/inventory/list', [app\controller\InventoryController::class, 'stockList']);
-    Route::get('/v1/inventory/logs', [app\controller\InventoryController::class, 'outLogs']);
-    Route::post('/v1/inventory/inbound', [app\controller\InventoryController::class, 'inbound']);
-    Route::post('/v1/inventory/outbound', [app\controller\InventoryController::class, 'outbound']);
-
-    // 3. 共享会议室与防冲突预订系统
-    Route::get('/v1/meeting/rooms', [app\controller\MeetingController::class, 'roomList']);
-    Route::get('/v1/meeting/list', [app\controller\MeetingController::class, 'bookingList']);
-    Route::post('/v1/meeting/apply', [app\controller\MeetingController::class, 'apply']);
-    Route::post('/v1/meeting/audit', [app\controller\MeetingController::class, 'audit']);
-
-    // 4. 计费策略配置
-    Route::get('/v1/fee-config/get', [app\controller\FeeConfigController::class, 'get']);
-    Route::post('/v1/fee-config/save', [app\controller\FeeConfigController::class, 'save']);
-    
-    // 5. IoT 智能网联中心
-    Route::get('/v1/iot/list', [app\controller\IotController::class, 'list']);
-    Route::post('/v1/iot/control', [app\controller\IotController::class, 'control']);
 
 })->middleware([
     app\middleware\AuthMiddleware::class

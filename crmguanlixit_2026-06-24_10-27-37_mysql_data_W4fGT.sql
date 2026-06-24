@@ -204,19 +204,22 @@ DROP TABLE IF EXISTS `decorations`;
 CREATE TABLE `decorations` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `apply_no` varchar(50) NOT NULL COMMENT '报备单号',
-  `enterprise_name` varchar(100) NOT NULL COMMENT '申请企业',
-  `room_info` varchar(100) NOT NULL COMMENT '施工房源',
+  `enterprise_id` int(11) NOT NULL COMMENT '关联入驻企业ID(enterprises.id)',
+  `space_id` int(11) NOT NULL COMMENT '关联物理空间ID(spaces.id)',
   `start_date` date NOT NULL COMMENT '进场日期',
   `end_date` date NOT NULL COMMENT '预计完工日期',
   `total_days` int(11) NOT NULL COMMENT '核准工期天数',
-  `status` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0待审核 1施工中 2延期审核 3已完工 4已驳回',
+  `status` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0:待审核 1:施工中 2:延期审核 3:已完工 4:已驳回',
   `deposit` decimal(10,2) NOT NULL DEFAULT '0.00' COMMENT '应缴押金',
   `manager` varchar(50) DEFAULT NULL COMMENT '现场负责人',
   `delay_reason` text COMMENT '二次延期说明',
-  `created_at` datetime DEFAULT NULL,
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='装修报备工期管理表';
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_enterprise_id` (`enterprise_id`),
+  KEY `idx_space_id` (`space_id`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='装修报备工期强关联管理表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -560,19 +563,21 @@ DROP TABLE IF EXISTS `meeting_bookings`;
 CREATE TABLE `meeting_bookings` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `booking_no` varchar(50) NOT NULL,
-  `enterprise_name` varchar(100) NOT NULL,
-  `room_id` int(11) NOT NULL,
+  `enterprise_id` int(11) NOT NULL COMMENT '强关联入驻企业ID',
+  `room_id` int(11) NOT NULL COMMENT '关联会议室ID',
   `date` date NOT NULL,
   `start_time` time NOT NULL,
   `end_time` time NOT NULL,
   `duration` decimal(4,1) NOT NULL,
   `cost` decimal(10,2) NOT NULL DEFAULT '0.00',
   `topic` varchar(200) DEFAULT NULL,
-  `status` tinyint(1) NOT NULL DEFAULT '0',
-  `created_at` datetime DEFAULT NULL,
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会议室预订防冲突表';
+  `status` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0待审核 1已通过 2驳回 3已取消',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_enterprise` (`enterprise_id`),
+  KEY `idx_room_date` (`room_id`,`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会议室预订防冲突强关联表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -595,6 +600,7 @@ CREATE TABLE `meeting_rooms` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   `capacity` int(11) NOT NULL,
+  `free_hours` int(11) NOT NULL DEFAULT '0' COMMENT '每次预订免费时长(小时)',
   `price_per_hour` decimal(10,2) NOT NULL DEFAULT '0.00',
   `has_projector` tinyint(1) DEFAULT '0',
   `has_whiteboard` tinyint(1) DEFAULT '0',
@@ -610,7 +616,7 @@ CREATE TABLE `meeting_rooms` (
 
 LOCK TABLES `meeting_rooms` WRITE;
 /*!40000 ALTER TABLE `meeting_rooms` DISABLE KEYS */;
-INSERT INTO `meeting_rooms` VALUES (1,'V01 极客董事局',20,200.00,1,1,1,'idle'),(2,'M02 创客洽谈室',8,50.00,0,1,0,'idle'),(3,'M03 敏捷作战室',12,100.00,1,1,0,'idle');
+INSERT INTO `meeting_rooms` VALUES (1,'V01 极客董事局',20,2,200.00,1,1,1,'idle'),(2,'M02 创客洽谈室',8,1,50.00,0,1,0,'idle'),(3,'M03 敏捷作战室',12,0,100.00,1,1,0,'active');
 /*!40000 ALTER TABLE `meeting_rooms` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1050,4 +1056,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-23 19:21:44
+-- Dump completed on 2026-06-24 10:27:37

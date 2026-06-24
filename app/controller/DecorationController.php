@@ -7,130 +7,145 @@ use support\Db;
 class DecorationController
 {
     /**
-     * 获取装修报备大盘列表 (支持按状态和企业名筛选)
+     * 装修报备列表（多表关联查询）
      */
     public function list(Request $request)
     {
-        $status = $request->get('status');
-        $entName = $request->get('entName');
+        $list = Db::table('decorations as d')
+            ->leftJoin('enterprises as e', 'd.enterprise_id', '=', 'e.id')
+            ->leftJoin('spaces as s', 'd.space_id', '=', 's.id')
+            ->select(
+                'd.*',
+                'e.name as enterprise_name',
+                Db::raw("CONCAT(s.building_name, '-', s.floor, 'F-', s.room_number) as room_info"),
+                's.status as current_space_status'
+            )
+            ->orderBy('d.id', 'desc')
+            ->get();
 
-        $query = Db::table('decorations');
-        
-        if ($status !== null && $status !== '') {
-            $query->where('status', $status);
-        }
-        if (!empty($entName)) {
-            $query->where('enterprise_name', 'like', "%{$entName}%");
-        }
-
-        // 默认按最新报备排序
-        $list = $query->orderBy('id', 'desc')->get();
-        
-        // 统计面板数据聚合
-        $stats = [
-            'pending' => Db::table('decorations')->where('status', 0)->count(),
-            'building' => Db::table('decorations')->where('status', 1)->count(),
-            'delaying' => Db::table('decorations')->where('status', 2)->count(),
-            'finished' => Db::table('decorations')->where('status', 3)->count(),
-        ];
-
-        return json(['code' => 200, 'msg' => 'success', 'data' => $list, 'stats' => $stats]);
+        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
 
     /**
-     * 提交新的装修报备申请
+     * 发起装修报备申请
      */
     public function apply(Request $request)
     {
-        $data = $request->post();
-        
-        if (empty($data['enterprise_name']) || empty($data['room_info'])) {
-            return json(['code' => 400, 'msg' => '关键申报信息不完整']);
+        $enterpriseId = $request->post('enterprise_id');
+        $spaceId = $request->post('space_id');
+        $startDate = $request->post('start_date');
+        $endDate = $request->post('end_date');
+        $manager = $request->post('manager', '');
+        $deposit = $request->post('deposit', 0.00);
+
+        if (!$enterpriseId || !$spaceId || !$startDate || !$endDate) {
+            return json(['code' => 400, 'msg' => '核心关联参数或工期缺失']);
         }
 
-        // 自动生成 ZX 开头的流水单号
-        $applyNo = 'ZX' . date('YmdHis') . rand(1000, 9999);
+        // 计算物理天数
+        $totalDays = (strtotime($endDate) - strtotime($startDate)) / 86400 + 1;
 
-        Db::table('decorations')->insert([
-            'apply_no' => $applyNo,
-            'enterprise_name' => $data['enterprise_name'],
-            'room_info' => $data['room_info'],
-            'start_date' => $data['dateRange'][0] ?? date('Y-m-d'),
-            'end_date' => $data['dateRange'][1] ?? date('Y-m-d'),
-            'total_days' => $data['total_days'] ?? 0,
-            'deposit' => $data['deposit'] ?? 5000,
-            'manager' => $data['manager'] ?? '',
-            'status' => 0,
-            'created_at' => date('Y-m-d H:i:s')
-        ]);
+        $data = [
+            'apply_no' => 'ZX' . date('YmdHis') . rand(1000, 9999),
+            'enterprise_id' => $enterpriseId,
+            'space_id' => $spaceId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'total_days' => max(1, intval($totalDays)),
+            'status' => 0, // 0: 待审核
+            'deposit' => $deposit,
+            'manager' => $manager,
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
 
-        return json(['code' => 200, 'msg' => '装修报备单提交成功，等待物业审核']);
+        Db::table('decorations')->insert($data);
+        return json(['code' => 200, 'msg' => '申请提交成功，等待物业中控室审核']);
     }
 
     /**
-     * 核心业务：审批流转与【多模块跨表联动】
+     * 物业中控室审批与房屋状态原子联动引擎
      */
     public function audit(Request $request)
     {
         $id = $request->post('id');
-        $status = $request->post('status'); // 1:同意进场 3:提前完工验收 4:驳回
-        
-        $record = Db::table('decorations')->where('id', $id)->first();
-        if (!$record) return json(['code' => 404, 'msg' => '未找到该报备记录']);
+        $status = $request->post('status'); // 1:施工中, 3:已完工, 4:已驳回
+
+        if (!in_array($status, [1, 3, 4])) {
+            return json(['code' => 400, 'msg' => '非法的流转状态值']);
+        }
+
+        $decoration = Db::table('decorations')->where('id', $id)->first();
+        if (!$decoration) {
+            return json(['code' => 404, 'msg' => '未找到该报备记录']);
+        }
 
         Db::beginTransaction();
         try {
-            // 1. 更新主表状态
+            // 1. 更新报备表单状态
             Db::table('decorations')->where('id', $id)->update([
                 'status' => $status,
                 'updated_at' => date('Y-m-d H:i:s')
             ]);
 
-            // 2. 【业财工单联动逻辑】：如果操作是“完工验收 (3)”
-            if ($status == 3) {
-                // 自动向工单系统派发一条【验收与退款】工单，指派给工程组
-                Db::table('work_orders')->insert([
-                    'title' => "【装修竣工专项验收】 - {$record->room_info}",
-                    'description' => "{$record->enterprise_name} 申报完工。请工程部核查墙体与消防。验收合格后，请通知财务退还押金 ￥{$record->deposit}",
-                    'priority' => 'high',
-                    'status' => 'pending', // 对应工单表的待处理状态
-                    'created_at' => date('Y-m-d H:i:s')
+            // 2. 触发空间资产状态机流转
+            if ($status == 1) {
+                // 审批通过进场施工 -> 房屋状态强转为 3:装修
+                Db::table('spaces')->where('id', $decoration->space_id)->update([
+                    'status' => 3,
+                    'enterprise_name' => Db::table('enterprises')->where('id', $decoration->enterprise_id)->value('name')
                 ]);
+            } elseif ($status == 3) {
+                // 装修完工结单 -> 动态研判该房屋当前是否存在生效中的租务合同
+                $hasActiveContract = Db::table('contracts')
+                    ->where('space_id', $decoration->space_id)
+                    ->where('status', 1) // 1: 生效中
+                    ->exists();
+
+                // 如果有生效合同，还原为 1:在租；若无有效合同（如入驻前退场或纯毛坯装修），还原为 0:空置
+                $targetStatus = $hasActiveContract ? 1 : 0;
                 
-                // 记录操作日志
-                $msg = '已审批通过！系统已联动【外勤工单系统】下发竣工验收与退还押金工单。';
-            } else if ($status == 1) {
-                // TODO: 可以在这里对接 IoT 控制器，下发门禁白名单
-                $msg = '已批准施工，门禁临时权限已预授权。';
-            } else {
-                $msg = '操作成功';
+                Db::table('spaces')->where('id', $decoration->space_id)->update([
+                    'status' => $targetStatus
+                ]);
             }
 
             Db::commit();
-            return json(['code' => 200, 'msg' => $msg]);
-
+            return json(['code' => 200, 'msg' => '审批完成，空间资产状态已同步联动']);
         } catch (\Exception $e) {
             Db::rollBack();
-            return json(['code' => 500, 'msg' => '底层联动执行异常: ' . $e->getMessage()]);
+            return json(['code' => 500, 'msg' => '联动失败，事务已回滚：' . $e->getMessage()]);
         }
     }
 
     /**
-     * 提交二次延期申请
+     * 施工延期报备
      */
     public function applyDelay(Request $request)
     {
         $id = $request->post('id');
         $newEndDate = $request->post('new_end_date');
-        $reason = $request->post('reason');
+        $reason = $request->post('delay_reason');
+
+        if (!$id || !$newEndDate || !$reason) {
+            return json(['code' => 400, 'msg' => '缺失延期核心参数']);
+        }
+
+        $decoration = Db::table('decorations')->where('id', $id)->first();
+        if (!$decoration) {
+            return json(['code' => 404, 'msg' => '未找到该报备记录']);
+        }
+
+        $totalDays = (strtotime($newEndDate) - strtotime($decoration->start_date)) / 86400 + 1;
 
         Db::table('decorations')->where('id', $id)->update([
-            'status' => 2, // 变更为延期审核中
             'end_date' => $newEndDate,
+            'total_days' => max(1, intval($totalDays)),
             'delay_reason' => $reason,
+            'status' => 2, // 2: 延期审核
             'updated_at' => date('Y-m-d H:i:s')
         ]);
 
-        return json(['code' => 200, 'msg' => '延期申请已提交后台决策']);
+        return json(['code' => 200, 'msg' => '延期工单已提交至中控台']);
     }
 }

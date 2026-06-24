@@ -76,9 +76,6 @@ class TenantPortalController
         return json(['code' => 200, 'msg' => '密码更新成功']);
     }
 
-    // ==========================================
-    // 核心联动：获取当前企业的物资借还明细
-    // ==========================================
     public function getInventory(Request $request)
     {
         $enterpriseId = $request->enterprise_id;
@@ -93,5 +90,139 @@ class TenantPortalController
             ->get();
 
         return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
+    }
+
+    public function getDecorations(Request $request)
+    {
+        $enterpriseId = $request->enterprise_id;
+        $list = Db::table('decorations as d')
+            ->leftJoin('spaces as s', 'd.space_id', '=', 's.id')
+            ->where('d.enterprise_id', $enterpriseId)
+            ->select('d.*', 's.building_name', 's.floor', 's.room_number')
+            ->orderBy('d.id', 'desc')
+            ->get();
+            
+        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
+    }
+
+    public function applyDecoration(Request $request)
+    {
+        $enterpriseId = $request->enterprise_id;
+        $spaceId = $request->post('space_id');
+        $startDate = $request->post('start_date');
+        $endDate = $request->post('end_date');
+        $manager = $request->post('manager', '');
+
+        if (!$spaceId || !$startDate || !$endDate) {
+            return json(['code' => 400, 'msg' => '请填写完整的工期数据']);
+        }
+
+        $owns = Db::table('contracts')
+            ->where('enterprise_id', $enterpriseId)
+            ->where('space_id', $spaceId)
+            ->where('status', 1)
+            ->exists();
+            
+        if (!$owns) {
+            return json(['code' => 403, 'msg' => '越权拦截：只能为您名下生效承租的房源提交报备']);
+        }
+
+        $totalDays = max(1, intval((strtotime($endDate) - strtotime($startDate)) / 86400 + 1));
+
+        Db::table('decorations')->insert([
+            'apply_no' => 'ZX' . date('YmdHis') . rand(1000, 9999),
+            'enterprise_id' => $enterpriseId,
+            'space_id' => $spaceId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'total_days' => $totalDays,
+            'status' => 0, 
+            'deposit' => 0, 
+            'manager' => $manager,
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s')
+        ]);
+        
+        return json(['code' => 200, 'msg' => '报备已成功提交至总控中心，请等待审批']);
+    }
+
+    // ==========================================
+    // 会议室移动端全系流转接口 (含防冲突与抵扣引擎)
+    // ==========================================
+    public function getMeetingRooms(Request $request)
+    {
+        $rooms = Db::table('meeting_rooms')->where('status', '!=', 'disabled')->get();
+        return json(['code' => 200, 'msg' => 'success', 'data' => $rooms]);
+    }
+
+    public function getMyMeetings(Request $request)
+    {
+        $enterpriseId = $request->enterprise_id;
+        $list = Db::table('meeting_bookings as mb')
+            ->join('meeting_rooms as mr', 'mb.room_id', '=', 'mr.id')
+            ->where('mb.enterprise_id', $enterpriseId)
+            ->select('mb.*', 'mr.name as room_name', 'mr.has_projector', 'mr.has_video_conf')
+            ->orderBy('mb.date', 'desc')
+            ->orderBy('mb.start_time', 'desc')
+            ->get();
+
+        return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
+    }
+
+    public function applyMeeting(Request $request)
+    {
+        $enterpriseId = $request->enterprise_id;
+        $roomId = $request->post('room_id');
+        $date = $request->post('date');
+        $startTime = $request->post('start_time');
+        $endTime = $request->post('end_time');
+        $topic = $request->post('topic', '内部会议');
+
+        if (!$roomId || !$date || !$startTime || !$endTime) {
+            return json(['code' => 400, 'msg' => '缺少必要的预订参数']);
+        }
+        if (strtotime($startTime) >= strtotime($endTime)) {
+            return json(['code' => 400, 'msg' => '逻辑错误：结束时间必须晚于开始时间']);
+        }
+
+        $conflict = Db::table('meeting_bookings')
+            ->where('room_id', $roomId)
+            ->where('date', $date)
+            ->where('status', '<', 2) 
+            ->where(function($q) use ($startTime, $endTime) {
+                $q->where(function($q1) use ($startTime, $endTime) {
+                    $q1->where('start_time', '<', $endTime)->where('end_time', '>', $startTime);
+                });
+            })
+            ->exists();
+
+        if ($conflict) {
+            return json(['code' => 409, 'msg' => '抱歉冲突，该时段会议室已被他人预订，请更换时间']);
+        }
+
+        // 核心计费引擎：减免时长动态抵扣算法
+        $room = Db::table('meeting_rooms')->where('id', $roomId)->first();
+        $durationHours = round((strtotime($endTime) - strtotime($startTime)) / 3600, 1);
+        
+        $freeHours = isset($room->free_hours) ? floatval($room->free_hours) : 0;
+        $billableHours = max(0, $durationHours - $freeHours);
+        
+        $cost = $billableHours * $room->price_per_hour;
+
+        Db::table('meeting_bookings')->insert([
+            'booking_no' => 'MR' . date('YmdHis') . rand(100, 999),
+            'enterprise_id' => $enterpriseId,
+            'room_id' => $roomId,
+            'date' => $date,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+            'duration' => $durationHours,
+            'cost' => $cost,
+            'topic' => $topic,
+            'status' => 0, 
+            'created_at' => date('Y-m-d H:i:s')
+        ]);
+
+        return json(['code' => 200, 'msg' => '预订成功进入审核池，可在服务追踪面板查看']);
     }
 }
