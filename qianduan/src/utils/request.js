@@ -2,18 +2,16 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
 const service = axios.create({
-    // 核心修改：不再写死 IP，改为动态读取环境变量中的 VITE_BASE_API
     baseURL: import.meta.env.VITE_BASE_API, 
     timeout: 10000 
 })
 
-// 请求拦截器：动态装载独立 Token
+// 请求拦截器：安全装载 Token
 service.interceptors.request.use(
     config => {
         const currentUrl = window.location.href
         let token = null
 
-        // 核心修复：根据访问的终端不同，物理隔离提取 Token，防止串号
         if (currentUrl.includes('/h5/tenant')) {
             token = localStorage.getItem('h5_tenant_token')
         } else if (currentUrl.includes('/h5/worker') || currentUrl.includes('/h5/login')) {
@@ -30,21 +28,22 @@ service.interceptors.request.use(
     error => Promise.reject(error)
 )
 
-// 响应拦截器：全局错误处理与剔除
+// 响应拦截器：全局错误处理
 service.interceptors.response.use(
     response => {
         const res = response.data
         
         if (res.code !== 200) {
-            // 静默处理消息轮询的异常，防控制台红字刷屏
             if (response.config.url.includes('/notification/list')) {
                 return Promise.reject(new Error('Silent Polling Reject'))
             }
 
+            // 先弹出后端返回的真实错误信息（例如：手机号或密码错误）
             ElMessage.error(res.msg || '系统繁忙')
             
-            // 处理鉴权丢失与越权
-            if (res.code === 401 || res.code === 403) {
+            // 【核心修复】：遇到401或403时，必须判断当前是不是在请求“登录接口”
+            // 如果是登录失败（也是返回401），绝对不能执行强制跳转，否则会导致一闪而过并清空页面！
+            if ((res.code === 401 || res.code === 403) && !response.config.url.includes('/login')) {
                 const currentUrl = window.location.href
                 
                 if (currentUrl.includes('/h5/tenant')) {

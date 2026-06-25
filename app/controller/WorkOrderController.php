@@ -6,110 +6,140 @@ use support\Db;
 
 class WorkOrderController
 {
-    // 定义全局 SLA 熔断标准 (秒)
-    const SLA_ACCEPT_LIMIT = 15 * 60; // 15分钟不接单即熔断
-    const SLA_ARRIVE_LIMIT = 30 * 60; // 30分钟不到场即熔断
+    const SLA_ACCEPT_LIMIT = 15 * 60; 
+    const SLA_ARRIVE_LIMIT = 30 * 60; 
 
     public function list(Request $request)
     {
         $tenantId = $request->tenantId ?? 1;
-        
         $list = Db::table('work_orders as w')
             ->where('w.tenant_id', $tenantId)
             ->leftJoin('admins as a', 'w.handler_id', '=', 'a.id')
             ->select('w.*', 'a.real_name as handler_name')
-            ->orderBy('w.priority', 'desc')
-            ->orderBy('w.id', 'desc')
-            ->get();
-
+            ->orderBy('w.priority', 'desc')->orderBy('w.id', 'desc')->get();
         return json(['code' => 200, 'msg' => 'success', 'data' => $list]);
     }
 
     public function add(Request $request)
     {
+        $processLog = [
+            [
+                'title' => '工单系统创建',
+                'operator' => $request->post('reporter_name', '中控室调度员'),
+                'desc' => $request->post('description', '无补充说明'),
+                'image' => $request->post('report_image_url', ''),
+                'time' => date('Y-m-d H:i:s')
+            ]
+        ];
+
         Db::table('work_orders')->insert([
             'tenant_id' => $request->tenantId ?? 1,
             'title' => $request->post('title'),
             'description' => $request->post('description', ''),
             'reporter_name' => $request->post('reporter_name', '系统内部上报'),
             'priority' => intval($request->post('priority', 0)),
-            'status' => 1, // 1待指派
+            'report_image_url' => $request->post('report_image_url', ''), 
+            'status' => 1, 
+            'process_log' => json_encode($processLog, JSON_UNESCAPED_UNICODE),
             'created_at' => date('Y-m-d H:i:s')
         ]);
         return json(['code' => 200, 'msg' => '工单已抛入公共调度池']);
     }
 
-    /**
-     * 核心动作流转与 SLA 拦截计算引擎
-     */
     public function action(Request $request)
     {
         $id = $request->post('id');
-        $action = $request->post('action'); // assign, accept, arrive, resolve
+        $action = $request->post('action'); 
         $workerId = $request->post('worker_id'); 
-        $content = $request->post('content', ''); // 完工结单备注或消耗说明
+        $content = $request->post('content', ''); 
+        $resolveImageUrl = $request->post('resolve_image_url', ''); 
 
         $order = Db::table('work_orders')->where('id', $id)->first();
         if (!$order) return json(['code' => 404, 'msg' => '工单迷失']);
 
         $now = time();
         $nowStr = date('Y-m-d H:i:s', $now);
-        $updateData = ['updated_at' => $nowStr];
-        $slaBreached = $order->sla_breached;
+        $updateData = []; 
+        $slaBreached = $order->sla_breached ?? 0; 
+        
+        // 解析现有的生命周期轨迹
+        $processLog = json_decode($order->process_log ?? '[]', true) ?: [];
+        $logEntry = ['time' => $nowStr, 'operator' => '系统']; // 初始化节点
 
         switch ($action) {
             case 'assign':
-            case 'accept':
-                // 流转至: 处理中 (记录接单时间，并计算接单 SLA)
-                if ($order->status >= 2) return json(['code' => 400, 'msg' => '逻辑互斥：工单已被接手']);
-                $updateData['status'] = 2;
-                $updateData['accepted_at'] = $nowStr;
-                $updateData['handler_id'] = $workerId ?? ($request->user->id ?? 0);
+                if ($order->status >= 2) return json(['code' => 400, 'msg' => '工单已在处理中']);
+                $updateData['status'] = 2; $updateData['assigned_at'] = $nowStr; $updateData['handler_id'] = $workerId;
                 
-                // SLA 计算: 创建时间与当前接单时间的差值
-                if (($now - strtotime($order->created_at)) > self::SLA_ACCEPT_LIMIT) {
-                    $slaBreached = 1; // 1: 接单超时
-                }
+                $assignedWorker = clone Db::table('admins')->where('id', $workerId)->first();
+                $logEntry['title'] = '调度室派单';
+                $logEntry['operator'] = '中控室';
+                $logEntry['desc'] = '明确指派给外勤：' . ($assignedWorker->real_name ?? '未知员工');
                 break;
 
-            case 'arrive':
-                // 流转至: 已到场勘察
-                $updateData['arrived_at'] = $nowStr;
-                // SLA 计算: 接单时间与当前到场时间的差值
-                if ($order->accepted_at && ($now - strtotime($order->accepted_at)) > self::SLA_ARRIVE_LIMIT) {
-                    $slaBreached = 2; // 2: 到场超时
-                }
+            case 'accept':
+                if ($order->status >= 3) return json(['code' => 400, 'msg' => '工单已完工']);
+                $updateData['status'] = 2; $updateData['accepted_at'] = $nowStr;
+                $updateData['handler_id'] = $workerId ?? ($request->user->id ?? $order->handler_id);
+                if (($now - strtotime($order->created_at)) > self::SLA_ACCEPT_LIMIT) $slaBreached = 1;
+                
+                $logEntry['title'] = '确认接单';
+                $logEntry['operator'] = '外勤人员';
+                $logEntry['desc'] = '已接收指令，准备前往现场';
                 break;
 
             case 'resolve':
-                // 流转至: 完工结单
-                $updateData['status'] = 4;
-                $updateData['resolved_at'] = $nowStr;
-                if ($content) {
-                    $updateData['content'] = $content;
-                }
+                if (!$resolveImageUrl) return json(['code' => 400, 'msg' => '必须上传现场照片']);
+                $updateData['status'] = 3; $updateData['resolved_at'] = $nowStr; $updateData['resolve_image_url'] = $resolveImageUrl; 
+                if ($content) $updateData['content'] = $content;
+                
+                $logEntry['title'] = '处理完毕提交验收';
+                $logEntry['operator'] = '外勤人员';
+                $logEntry['desc'] = '已上传完工凭证。备注：' . ($content ?: '无');
+                $logEntry['image'] = $resolveImageUrl;
                 break;
 
-            default:
-                return json(['code' => 400, 'msg' => '未知动作字典']);
+            case 'audit_pass':
+                if ($order->status != 3) return json(['code' => 400, 'msg' => '状态错误']);
+                $updateData['status'] = 4; 
+                
+                $logEntry['title'] = '验收通过';
+                $logEntry['operator'] = '中控室';
+                $logEntry['desc'] = '照片核实无误，工单正式归档闭环';
+                break;
+
+            case 'audit_reject':
+                if ($order->status != 3) return json(['code' => 400, 'msg' => '状态错误']);
+                $updateData['status'] = 2; $updateData['resolved_at'] = null; $updateData['resolve_image_url'] = ''; 
+                if ($content) $updateData['content'] = ltrim(($order->content ?? '') . ' | [驳回]: ' . $content, ' | ');
+                
+                $logEntry['title'] = '验收被驳回';
+                $logEntry['operator'] = '中控室';
+                $logEntry['desc'] = '作业不合格，责令重做！理由：' . $content;
+                break;
+
+            default: return json(['code' => 400, 'msg' => '未知动作字典']);
         }
 
         $updateData['sla_breached'] = $slaBreached;
+        
+        // 压入最新的轨迹节点并保存
+        $processLog[] = $logEntry;
+        $updateData['process_log'] = json_encode($processLog, JSON_UNESCAPED_UNICODE);
 
-        Db::table('work_orders')->where('id', $id)->update($updateData);
+        if (!empty($updateData)) {
+            Db::table('work_orders')->where('id', $id)->update($updateData);
 
-        $msgMap = [
-            'assign' => '指令已派发并锁定负责人',
-            'accept' => '接单成功，请尽快前往现场',
-            'arrive' => '地理防区打卡成功，请开始作业',
-            'resolve' => '故障已排除，工单流转闭环完成'
-        ];
-
-        $responseMsg = $msgMap[$action] ?? '状态流转成功';
-        if ($slaBreached > 0) {
-            $responseMsg .= " (警告：该节点已触发 SLA 违规预警)";
+            // 触发消息铃铛
+            if ($action === 'assign' && $workerId) {
+                Db::table('worker_notifications')->insert(['worker_id' => $workerId, 'title' => '新任务派发', 'content' => "工单 [{$order->title}]，请查阅现场照片并前往处置。", 'created_at' => $nowStr]);
+            } elseif ($action === 'audit_reject') {
+                Db::table('worker_notifications')->insert(['worker_id' => $order->handler_id, 'title' => '验收被驳回重做', 'content' => "工单 [{$order->title}] 验收未通过，驳回理由：{$content}。", 'created_at' => $nowStr]);
+            } elseif ($action === 'audit_pass') {
+                 Db::table('worker_notifications')->insert(['worker_id' => $order->handler_id, 'title' => '验收通过结案', 'content' => "工单 [{$order->title}] 已核实闭环。", 'created_at' => $nowStr]);
+            }
         }
 
-        return json(['code' => 200, 'msg' => $responseMsg]);
+        return json(['code' => 200, 'msg' => '状态流转成功']);
     }
 }

@@ -4,19 +4,40 @@
       
       <el-tab-pane label="安防巡检打卡流水" name="records">
         <div class="toolbar">
-          <el-button type="warning" icon="Download" @click="exportData('patrol_records')">导出打卡流水</el-button>
-          <el-button icon="Refresh" @click="fetchRecords">刷新打卡流</el-button>
+          <el-button type="warning" icon="Download" @click="exportData('patrol_records')" plain>导出打卡流水</el-button>
+          <el-button type="primary" icon="Refresh" @click="fetchRecords">刷新打卡大屏</el-button>
         </div>
-        <el-table :data="recordsData" v-loading="recordsLoading" border stripe style="width: 100%">
+        <el-table :data="recordsData" v-loading="recordsLoading" border stripe style="width: 100%; border-radius: 4px;">
           <el-table-column prop="id" label="流水号" width="80" align="center" />
-          <el-table-column prop="worker_name" label="巡更人员" width="150" align="center">
+          
+          <el-table-column prop="worker_name" label="巡更人员" width="120" align="center">
             <template #default="{ row }"><span style="font-weight: bold; color: #409eff;">{{ row.worker_name }}</span></template>
           </el-table-column>
-          <el-table-column prop="location" label="巡检物理点位" min-width="180" />
-          <el-table-column prop="remarks" label="异常备注与隐患说明" min-width="200" show-overflow-tooltip />
-          <el-table-column label="工况状态" width="120" align="center">
+          
+          <el-table-column prop="location" label="巡检物理点位" min-width="160" />
+          
+          <el-table-column label="现场实勘照片" width="140" align="center">
             <template #default="{ row }">
-              <el-tag :type="row.status === 1 ? 'success' : 'danger'">{{ row.status === 1 ? '安全正常' : '隐患异常' }}</el-tag>
+              <div v-if="row.image_url" style="display: flex; justify-content: center;">
+                <el-image 
+                  style="width: 50px; height: 50px; border-radius: 4px; border: 1px solid #ebeef5; cursor: zoom-in;" 
+                  :src="getFullImgUrl(row.image_url)" 
+                  :preview-src-list="[getFullImgUrl(row.image_url)]" 
+                  fit="cover" 
+                  preview-teleported 
+                />
+              </div>
+              <span v-else style="color: #c0c4cc; font-size: 12px;">无图像记录</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="remarks" label="异常备注与隐患说明" min-width="180" show-overflow-tooltip />
+          
+          <el-table-column label="工况状态" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.status === 1 ? 'success' : 'danger'" effect="dark">
+                {{ row.status === 1 ? '安全正常' : '隐患异常' }}
+              </el-tag>
             </template>
           </el-table-column>
           
@@ -31,7 +52,7 @@
       <el-tab-pane label="物理巡检点位配置" name="points">
         <div class="toolbar">
           <el-button type="primary" icon="Plus" @click="dialogVisible = true">设立巡检网格点</el-button>
-          <el-button type="warning" icon="Download" @click="exportData('patrol_points')">导出网格配置</el-button>
+          <el-button type="warning" icon="Download" @click="exportData('patrol_points')" plain>导出网格配置</el-button>
           <el-button icon="Refresh" @click="fetchPoints">刷新点位</el-button>
         </div>
         <el-table :data="pointsData" v-loading="pointsLoading" border stripe style="width: 100%">
@@ -76,6 +97,12 @@ const dialogVisible = ref(false)
 const submitLoading = ref(false)
 const pointFormRef = ref(null)
 const pointForm = reactive({ location: '' })
+
+// 辅助方法：拼接图片全路径
+const getFullImgUrl = (url) => {
+  if (!url) return ''
+  return url.startsWith('http') ? url : `http://47.120.52.65:8787${url}`
+}
 
 const fetchRecords = async () => {
   recordsLoading.value = true
@@ -130,7 +157,9 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.patrol-container { width: 100%; }
-.patrol-tabs { box-shadow: none; border-radius: 4px; }
+.patrol-container { width: 100%; background: #fff; padding: 20px; height: 100%; box-sizing: border-box; }
+.patrol-tabs { box-shadow: none; border-radius: 4px; border: none; }
 .toolbar { margin-bottom: 20px; display: flex; gap: 10px; }
+:deep(.el-tabs--border-card > .el-tabs__header) { background-color: #f5f7fa; border-bottom: 1px solid #e4e7ed; margin: 0; }
+:deep(.el-tabs--border-card > .el-tabs__content) { padding: 20px 0; }
 </style>

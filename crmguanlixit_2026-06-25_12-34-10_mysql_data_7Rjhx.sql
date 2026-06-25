@@ -49,7 +49,7 @@ CREATE TABLE `admins` (
 
 LOCK TABLES `admins` WRITE;
 /*!40000 ALTER TABLE `admins` DISABLE KEYS */;
-INSERT INTO `admins` VALUES (1,1,'admin','e10adc3949ba59abbe56e057f20f883e','超级管理员',NULL,'高新科技产业园',1,0,1,'2026-01-01 09:00:00','总控中心指挥官','负责全园区 SaaS 平台底座所有宏观资产、配置和权限的最高控制权','2026-06-24 20:42:45','223.215.60.73',1),(2,1,'manager01','e10adc3949ba59abbe56e057f20f883e','招商总监-刘总',NULL,'高新科技产业园',2,0,1,'2026-01-02 10:00:00','招商部负责人','全面统筹客户线索、企业建档入驻契约、大厦去化热力图穿透流转',NULL,NULL,2),(3,1,'finance01','e10adc3949ba59abbe56e057f20f883e','财务主管-特特',NULL,'高新科技产业园',3,0,1,'2026-01-02 11:00:00','业财核销组长','统扣全园区租金、物业能耗账单催收，以及退租清算单的最终退款结清',NULL,NULL,3),(101,1,'13755667788','e10adc3949ba59abbe56e057f20f883e','张三',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','安保专员','负责全园区安防网格防区定点巡更打卡，隐患即时上报中控调度室','2026-06-12 12:17:41','183.161.183.48',4),(102,1,'13899887766','e10adc3949ba59abbe56e057f20f883e','李四',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','保洁组长','负责公共区域绿化清洁、生活垃圾定点消杀打卡监督','2026-06-12 13:50:58','183.161.183.48',4),(103,1,'13911223344','e10adc3949ba59abbe56e057f20f883e','王五',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','工程维修','承接中控派发的所有强弱电、空调漏水、物理设施破坏的现场抢修打卡',NULL,NULL,4),(104,1,'13455667788','e10adc3949ba59abbe56e057f20f883e','荔湾三','1345566778','高新科技产业园',6,2,1,'2026-06-14 22:01:15',NULL,NULL,NULL,NULL,0);
+INSERT INTO `admins` VALUES (1,1,'admin','e10adc3949ba59abbe56e057f20f883e','超级管理员',NULL,'高新科技产业园',1,0,1,'2026-01-01 09:00:00','总控中心指挥官','负责全园区 SaaS 平台底座所有宏观资产、配置和权限的最高控制权','2026-06-24 20:42:45','223.215.60.73',1),(2,1,'manager01','e10adc3949ba59abbe56e057f20f883e','招商总监-刘总',NULL,'高新科技产业园',2,0,1,'2026-01-02 10:00:00','招商部负责人','全面统筹客户线索、企业建档入驻契约、大厦去化热力图穿透流转',NULL,NULL,2),(3,1,'finance01','e10adc3949ba59abbe56e057f20f883e','财务主管-特特',NULL,'高新科技产业园',3,0,1,'2026-01-02 11:00:00','业财核销组长','统扣全园区租金、物业能耗账单催收，以及退租清算单的最终退款结清',NULL,NULL,3),(101,1,'13755667788','e10adc3949ba59abbe56e057f20f883e','张三',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','安保专员','负责全园区安防网格防区定点巡更打卡，隐患即时上报中控调度室','2026-06-12 12:17:41','183.161.183.48',4),(102,1,'13899887766','e10adc3949ba59abbe56e057f20f883e','李四',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','保洁组长','负责公共区域绿化清洁、生活垃圾定点消杀打卡监督','2026-06-25 09:19:41','223.215.60.73',4),(103,1,'13911223344','e10adc3949ba59abbe56e057f20f883e','王五',NULL,'高新科技产业园',4,0,1,'2026-01-05 08:30:00','工程维修','承接中控派发的所有强弱电、空调漏水、物理设施破坏的现场抢修打卡','2026-06-24 22:34:39','223.215.60.73',4),(104,1,'13455667788','e10adc3949ba59abbe56e057f20f883e','荔湾三','1345566778','高新科技产业园',6,2,1,'2026-06-14 22:01:15',NULL,NULL,NULL,NULL,0);
 /*!40000 ALTER TABLE `admins` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -293,7 +293,7 @@ CREATE TABLE `enterprises` (
 
 LOCK TABLES `enterprises` WRITE;
 /*!40000 ALTER TABLE `enterprises` DISABLE KEYS */;
-INSERT INTO `enterprises` VALUES (1,1,1,'拓普检测技术有限公司','胡总','15888888888',NULL,NULL,NULL,'2026-01-10 14:00:00','e10adc3949ba59abbe56e057f20f883e','检验检测',NULL,NULL),(2,1,1,'华为技术有限公司','任总','13055555555',NULL,NULL,NULL,'2026-01-10 14:00:00','e10adc3949ba59abbe56e057f20f883e','硬核科技',NULL,NULL),(3,1,1,'滴滴出行华南分部','程维','13044444444',NULL,NULL,NULL,'2026-01-10 14:00:00','e10adc3949ba59abbe56e057f20f883e','智能交通',NULL,NULL),(4,1,1,'美团科技有限公司','王兴','13033333333',NULL,NULL,NULL,'2026-01-10 14:00:00','e10adc3949ba59abbe56e057f20f883e','本地生活',NULL,NULL),(5,1,1,'百度在线网络技术','李彦','13022222222',NULL,NULL,NULL,'2026-01-10 14:00:00','e10adc3949ba59abbe56e057f20f883e','AI大模型',NULL,NULL),(6,1,1,'宁波双港科创贸易有限公司','朱总','15888158158',NULL,NULL,NULL,'2026-06-20 00:01:15','e10adc3949ba59abbe56e057f20f883e','外贸',NULL,NULL),(7,1,1,'	 宁波双港科创贸易有限公司','胡总','15888058058',NULL,NULL,NULL,'2026-06-20 00:06:27','e10adc3949ba59abbe56e057f20f883e','贸易',NULL,NULL),(8,1,1,'张三','李四','12312341234',NULL,NULL,NULL,'2026-06-20 00:45:57','e10adc3949ba59abbe56e057f20f883e','自住',NULL,NULL),(9,1,1,'哆啦A梦有限公司','野比大雄','13766554433',NULL,NULL,NULL,'2026-06-21 22:05:24','e10adc3949ba59abbe56e057f20f883e','设计',NULL,NULL);
+INSERT INTO `enterprises` VALUES (1,1,1,'拓普检测技术有限公司','胡总','15888888888',NULL,NULL,NULL,'2026-01-10 14:00:00','e10adc3949ba59abbe56e057f20f883e','检验检测','2026-06-24 21:51:58','223.215.60.73'),(2,1,1,'华为技术有限公司','任总','13055555555',NULL,NULL,NULL,'2026-01-10 14:00:00','e10adc3949ba59abbe56e057f20f883e','硬核科技',NULL,NULL),(3,1,1,'滴滴出行华南分部','程维','13044444444',NULL,NULL,NULL,'2026-01-10 14:00:00','e10adc3949ba59abbe56e057f20f883e','智能交通',NULL,NULL),(4,1,1,'美团科技有限公司','王兴','13033333333',NULL,NULL,NULL,'2026-01-10 14:00:00','e10adc3949ba59abbe56e057f20f883e','本地生活',NULL,NULL),(5,1,1,'百度在线网络技术','李彦','13022222222',NULL,NULL,NULL,'2026-01-10 14:00:00','e10adc3949ba59abbe56e057f20f883e','AI大模型',NULL,NULL),(6,1,1,'宁波双港科创贸易有限公司','朱总','15888158158',NULL,NULL,NULL,'2026-06-20 00:01:15','e10adc3949ba59abbe56e057f20f883e','外贸',NULL,NULL),(7,1,1,'	 宁波双港科创贸易有限公司','胡总','15888058058',NULL,NULL,NULL,'2026-06-20 00:06:27','e10adc3949ba59abbe56e057f20f883e','贸易',NULL,NULL),(8,1,1,'张三','李四','12312341234',NULL,NULL,NULL,'2026-06-20 00:45:57','e10adc3949ba59abbe56e057f20f883e','自住',NULL,NULL),(9,1,1,'哆啦A梦有限公司','野比大雄','13766554433',NULL,NULL,NULL,'2026-06-21 22:05:24','e10adc3949ba59abbe56e057f20f883e','设计',NULL,NULL);
 /*!40000 ALTER TABLE `enterprises` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -816,8 +816,11 @@ CREATE TABLE `patrol_records` (
   `is_normal` tinyint(1) NOT NULL DEFAULT '1',
   `remark` text,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `worker_id` int(11) NOT NULL DEFAULT '0' COMMENT '打卡员工ID',
+  `image_url` varchar(255) DEFAULT '' COMMENT '打卡现场照片',
+  `status` tinyint(1) NOT NULL DEFAULT '1' COMMENT '状态 1:正常 2:异常',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -826,6 +829,7 @@ CREATE TABLE `patrol_records` (
 
 LOCK TABLES `patrol_records` WRITE;
 /*!40000 ALTER TABLE `patrol_records` DISABLE KEYS */;
+INSERT INTO `patrol_records` VALUES (1,101,'王五',1,'','2026-06-25 07:58:03',103,'/uploads/202606/20260625075752_c6bd10bfa80c550b.jpg',1);
 /*!40000 ALTER TABLE `patrol_records` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1126,8 +1130,12 @@ CREATE TABLE `work_orders` (
   `resolved_at` datetime DEFAULT NULL COMMENT '结单时间戳',
   `content` text COMMENT '工单详情/现场说明',
   `material_cost` decimal(10,2) NOT NULL DEFAULT '0.00' COMMENT '工单消耗的物料总成本',
+  `report_image_url` varchar(255) DEFAULT '' COMMENT '上报现场照片',
+  `resolve_image_url` varchar(255) DEFAULT '' COMMENT '完工核实照片',
+  `assigned_at` datetime DEFAULT NULL COMMENT '中控指派时间',
+  `process_log` longtext COMMENT '工单生命周期流转记录(JSON格式)',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1136,7 +1144,7 @@ CREATE TABLE `work_orders` (
 
 LOCK TABLES `work_orders` WRITE;
 /*!40000 ALTER TABLE `work_orders` DISABLE KEYS */;
-INSERT INTO `work_orders` VALUES (1,1,'腾讯大厦3楼男厕漏水','【现场照片证物】: /uploads/cert_6a35606a46647.jpg\n水管爆裂，漫出洗手间，请求紧急支援','腾讯技术部-陈主管',0,1,0,1,'2026-06-23 02:19:36',NULL,NULL,NULL,NULL,0.00),(2,1,'京东大厦C座电梯困人应急响应','监控室发现C座货梯卡在4-5楼之间，需立即进行安抚与物理救援\n[结单备注]: H5移动端打卡完工','中控室自动预警',102,4,0,1,'2026-06-23 01:39:36','2026-06-23 02:28:43',NULL,'2026-06-23 02:28:56',NULL,0.00),(3,1,'拓普检测实验室空调不制冷','内机出风口滴水，显示E4故障码','拓普检测-胡总',103,2,0,0,'2026-06-23 00:24:36','2026-06-23 00:34:36','2026-06-23 00:54:36',NULL,NULL,0.00),(4,1,'园区南门道闸被外来车辆撞损','货车倒车碰坏道闸栏杆，车辆已被门岗拦截，需定损','门岗室-老李',101,2,0,1,'2026-06-22 23:24:36','2026-06-23 00:24:36','2026-06-23 00:29:36',NULL,NULL,0.00),(5,1,'甬城公寓2层走廊呕吐物清理','周末租客醉酒，走廊地毯需进行深度清洁除味\n[结单备注]: H5移动端打卡完工，已使用洗地机清洗完毕并喷洒除味剂','公寓管家-小王',102,4,0,0,'2026-06-22 02:24:36','2026-06-22 03:24:36','2026-06-22 04:24:36','2026-06-22 05:24:36',NULL,0.00);
+INSERT INTO `work_orders` VALUES (1,1,'腾讯大厦3楼男厕漏水','【现场照片证物】: /uploads/cert_6a35606a46647.jpg\n水管爆裂，漫出洗手间，请求紧急支援','腾讯技术部-陈主管',103,4,0,1,'2026-06-23 02:19:36',NULL,NULL,'2026-06-25 07:45:36',NULL,0.00,'','/uploads/202606/20260625074534_1542e3d1a94b352a.jpg','2026-06-25 07:28:45',NULL),(2,1,'京东大厦C座电梯困人应急响应','监控室发现C座货梯卡在4-5楼之间，需立即进行安抚与物理救援\n[结单备注]: H5移动端打卡完工','中控室自动预警',102,4,0,1,'2026-06-23 01:39:36','2026-06-23 02:28:43',NULL,'2026-06-23 02:28:56',NULL,0.00,'','',NULL,NULL),(3,1,'拓普检测实验室空调不制冷','内机出风口滴水，显示E4故障码','拓普检测-胡总',103,4,0,0,'2026-06-23 00:24:36','2026-06-23 00:34:36','2026-06-23 00:54:36','2026-06-24 22:41:52',NULL,0.00,'','',NULL,NULL),(4,1,'园区南门道闸被外来车辆撞损','货车倒车碰坏道闸栏杆，车辆已被门岗拦截，需定损','门岗室-老李',101,2,0,1,'2026-06-22 23:24:36','2026-06-23 00:24:36','2026-06-23 00:29:36',NULL,NULL,0.00,'','',NULL,NULL),(5,1,'甬城公寓2层走廊呕吐物清理','周末租客醉酒，走廊地毯需进行深度清洁除味\n[结单备注]: H5移动端打卡完工，已使用洗地机清洗完毕并喷洒除味剂','公寓管家-小王',102,4,0,0,'2026-06-22 02:24:36','2026-06-22 03:24:36','2026-06-22 04:24:36','2026-06-22 05:24:36',NULL,0.00,'','',NULL,NULL),(6,1,'有人打架','','王五 (巡查上报)',103,4,0,1,'2026-06-25 07:44:40',NULL,NULL,'2026-06-25 07:47:08','[审核驳回]: 测试',0.00,'/uploads/202606/20260625074430_8c21cef929723ce7.webp','/uploads/202606/20260625074707_b417ee23228249f4.jpg','2026-06-25 07:44:50',NULL);
 /*!40000 ALTER TABLE `work_orders` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1155,7 +1163,7 @@ CREATE TABLE `worker_notifications` (
   `is_read` tinyint(1) DEFAULT '0',
   `created_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COMMENT='外勤员工专属消息通道';
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COMMENT='外勤员工专属消息通道';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1164,7 +1172,7 @@ CREATE TABLE `worker_notifications` (
 
 LOCK TABLES `worker_notifications` WRITE;
 /*!40000 ALTER TABLE `worker_notifications` DISABLE KEYS */;
-INSERT INTO `worker_notifications` VALUES (1,102,'物资发放入账提醒','您已从仓库成功登记发放 1 个 【拖把】。',0,'2026-06-21 15:26:28'),(7,102,'调度中心新任务派发','任务大厅有新下发的工单 [京东大厦C座电梯困人应急响应] 已指定由您负责，请前往现场处置并在 H5 完工打卡。',1,'2026-06-23 02:28:43');
+INSERT INTO `worker_notifications` VALUES (1,102,'物资发放入账提醒','您已从仓库成功登记发放 1 个 【拖把】。',0,'2026-06-21 15:26:28'),(7,102,'调度中心新任务派发','任务大厅有新下发的工单 [京东大厦C座电梯困人应急响应] 已指定由您负责，请前往现场处置并在 H5 完工打卡。',1,'2026-06-23 02:28:43'),(8,103,'调度中心新任务派发','您有一条新指派的工单 [有人打架]，请查阅现场隐患照片并及时前往处置。',0,'2026-06-25 07:44:50'),(9,103,'工单验收通过结案','您处理的工单 [腾讯大厦3楼男厕漏水] 已成功通过中控室核实验收，辛苦了！',0,'2026-06-25 07:45:51'),(10,103,'工单验收被驳回重做','您的工单 [有人打架] 验收未通过，驳回理由：测试。请立即重新处理。',0,'2026-06-25 07:46:56'),(11,103,'工单验收通过结案','您处理的工单 [有人打架] 已成功通过中控室核实验收，辛苦了！',0,'2026-06-25 07:47:14');
 /*!40000 ALTER TABLE `worker_notifications` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1185,4 +1193,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-24 20:47:25
+-- Dump completed on 2026-06-25 12:34:10

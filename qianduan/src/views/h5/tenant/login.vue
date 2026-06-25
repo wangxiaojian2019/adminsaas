@@ -48,7 +48,6 @@ const handleLogin = () => {
   if (!formRef.value) return
 
   formRef.value.validate(async (valid) => {
-    // 核心修复 4：如果表单校验没通过，必须给出显式警告，不能静默拦截
     if (!valid) {
       ElMessage.warning('请检查手机号或密码是否已填写')
       return
@@ -57,19 +56,19 @@ const handleLogin = () => {
     loading.value = true
     try {
       const res = await request.post('/api/tenant/login', form)
-      if (res.code === 200) {
-        localStorage.setItem('h5_tenant_token', res.data.token)
-        localStorage.setItem('tenant_info', JSON.stringify(res.data.tenant_info))
-        ElMessage.success('欢迎进入企业租户服务门户')
-        router.push('/h5/tenant/index')
-      } else {
-        ElMessage.error(res.msg || '登录验证失败')
-      }
+      // 只要能走到这里，说明 res.code 必定是 200（因为非 200 都在 request.js 被拦截了）
+      localStorage.setItem('h5_tenant_token', res.data.token)
+      localStorage.setItem('tenant_info', JSON.stringify(res.data.tenant_info))
+      ElMessage.success('欢迎进入企业租户服务门户')
+      router.push('/h5/tenant/index')
+      
     } catch (e) {
-      // 核心修复 5：捕获 500 级崩溃异常并强制暴露
-      console.error('前端捕获异常:', e)
-      ElMessage.error('系统异常：请按 F12 检查浏览器控制台或联系管理员')
+      // 【终极修复】：request.js 已经负责弹出了具体的错误提示（如“手机号或密码错误”）
+      // 这里只需要静默捕获，终止后续逻辑即可。
+      // 不再弹出“系统异常”去覆盖真实的业务报错，也不再往控制台抛红字。
+      console.log('登录拦截:', e.message)
     } finally {
+      // 无论成功还是失败，最后都要关掉按钮的加载圈圈
       loading.value = false
     }
   })
