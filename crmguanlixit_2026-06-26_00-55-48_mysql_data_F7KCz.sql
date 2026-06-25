@@ -298,6 +298,39 @@ INSERT INTO `enterprises` VALUES (1,1,1,'拓普检测技术有限公司','胡总
 UNLOCK TABLES;
 
 --
+-- Table structure for table `export_applications`
+--
+
+DROP TABLE IF EXISTS `export_applications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `export_applications` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `tenant_id` int(11) NOT NULL DEFAULT '1',
+  `applicant_id` int(11) NOT NULL COMMENT '申请人ID(admin_id)',
+  `applicant_name` varchar(50) NOT NULL COMMENT '申请人姓名',
+  `module_name` varchar(50) NOT NULL COMMENT '申请导出的模块标识',
+  `reason` varchar(255) NOT NULL COMMENT '导出事由',
+  `status` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0待审批 1已通过 2已驳回',
+  `auditor_id` int(11) DEFAULT '0' COMMENT '审批人ID',
+  `expired_at` datetime DEFAULT NULL COMMENT '授权过期时间(通过后24小时内有效)',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_applicant_module` (`applicant_id`,`module_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='数据资产导出审批流转表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `export_applications`
+--
+
+LOCK TABLES `export_applications` WRITE;
+/*!40000 ALTER TABLE `export_applications` DISABLE KEYS */;
+/*!40000 ALTER TABLE `export_applications` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `export_audit_logs`
 --
 
@@ -313,7 +346,7 @@ CREATE TABLE `export_audit_logs` (
   `ip_address` varchar(50) DEFAULT NULL COMMENT '操作IP',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -322,7 +355,7 @@ CREATE TABLE `export_audit_logs` (
 
 LOCK TABLES `export_audit_logs` WRITE;
 /*!40000 ALTER TABLE `export_audit_logs` DISABLE KEYS */;
-INSERT INTO `export_audit_logs` VALUES (1,1,'未知人员','空间资产台账',2,'183.161.183.48','2026-06-11 20:57:46'),(2,1,'未知人员','中控调度工单池',0,'183.161.183.48','2026-06-11 20:58:12'),(3,1,'未知人员','空间资产台账',2,'115.213.60.209','2026-06-12 08:32:50'),(4,1,'未知人员','安防巡检网格配置',2,'183.161.183.48','2026-06-12 18:03:28'),(5,1,'未知人员','租务合同台账',3,'39.188.119.140','2026-06-12 19:38:32');
+INSERT INTO `export_audit_logs` VALUES (1,1,'未知人员','空间资产台账',2,'183.161.183.48','2026-06-11 20:57:46'),(2,1,'未知人员','中控调度工单池',0,'183.161.183.48','2026-06-11 20:58:12'),(3,1,'未知人员','空间资产台账',2,'115.213.60.209','2026-06-12 08:32:50'),(4,1,'未知人员','安防巡检网格配置',2,'183.161.183.48','2026-06-12 18:03:28'),(5,1,'未知人员','租务合同台账',3,'39.188.119.140','2026-06-12 19:38:32'),(6,1,'超级管理员','招商线索库',7,'223.215.60.73','2026-06-25 23:40:08'),(7,1,'超级管理员','招商线索库',7,'223.215.60.73','2026-06-25 23:45:55'),(8,1,'超级管理员','空间资产台账',5,'223.215.60.73','2026-06-25 23:46:16');
 /*!40000 ALTER TABLE `export_audit_logs` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -776,6 +809,35 @@ INSERT INTO `parking_vehicles` VALUES (1,1,'粤B88881',1,'地下A-001',2,'2026-0
 UNLOCK TABLES;
 
 --
+-- Table structure for table `patrol_instances`
+--
+
+DROP TABLE IF EXISTS `patrol_instances`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `patrol_instances` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `point_id` int(11) NOT NULL,
+  `task_date` date NOT NULL,
+  `time_slot` varchar(20) NOT NULL,
+  `worker_id` int(11) DEFAULT NULL,
+  `is_completed` tinyint(1) DEFAULT '0',
+  `completed_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_unique_task` (`point_id`,`task_date`,`time_slot`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `patrol_instances`
+--
+
+LOCK TABLES `patrol_instances` WRITE;
+/*!40000 ALTER TABLE `patrol_instances` DISABLE KEYS */;
+/*!40000 ALTER TABLE `patrol_instances` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `patrol_points`
 --
 
@@ -820,7 +882,7 @@ CREATE TABLE `patrol_records` (
   `image_url` varchar(255) DEFAULT '' COMMENT '打卡现场照片',
   `status` tinyint(1) NOT NULL DEFAULT '1' COMMENT '状态 1:正常 2:异常',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -829,8 +891,33 @@ CREATE TABLE `patrol_records` (
 
 LOCK TABLES `patrol_records` WRITE;
 /*!40000 ALTER TABLE `patrol_records` DISABLE KEYS */;
-INSERT INTO `patrol_records` VALUES (1,101,'王五',1,'','2026-06-25 07:58:03',103,'/uploads/202606/20260625075752_c6bd10bfa80c550b.jpg',1);
+INSERT INTO `patrol_records` VALUES (1,101,'王五',1,'','2026-06-25 07:58:03',103,'/uploads/202606/20260625075752_c6bd10bfa80c550b.jpg',1),(2,101,'张三',1,'','2026-06-26 00:15:50',101,'/uploads/202606/20260626001549_f51918467ad17225.jpg',1);
 /*!40000 ALTER TABLE `patrol_records` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `patrol_tasks`
+--
+
+DROP TABLE IF EXISTS `patrol_tasks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `patrol_tasks` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `point_id` int(11) NOT NULL,
+  `frequency` varchar(20) NOT NULL COMMENT '周期：daily, weekly, monthly',
+  `time_slots` varchar(100) DEFAULT NULL COMMENT '时间段：早,中,晚',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `patrol_tasks`
+--
+
+LOCK TABLES `patrol_tasks` WRITE;
+/*!40000 ALTER TABLE `patrol_tasks` DISABLE KEYS */;
+/*!40000 ALTER TABLE `patrol_tasks` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -1194,4 +1281,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-25 21:47:20
+-- Dump completed on 2026-06-26  0:55:48

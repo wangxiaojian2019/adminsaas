@@ -4,8 +4,8 @@
       <div class="header-toolbar">
         <h2 class="page-title">招商与线索管控中心</h2>
         <div>
-          <el-button type="warning" icon="Download" size="large" @click="exportData">带水印导出线索</el-button>
-          <el-button type="primary" icon="Plus" size="large" @click="openAddDialog">录入新线索 (锁定保护期)</el-button>
+          <ExportBtn module="leads" />
+          <el-button type="primary" icon="Plus" size="large" @click="openAddDialog" style="margin-left: 10px;">录入新线索 (锁定保护期)</el-button>
         </div>
       </div>
 
@@ -179,6 +179,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Briefcase, WarnTriangleFilled, Plus, Download, InfoFilled, CircleCheckFilled, Microphone, Document, User } from '@element-plus/icons-vue'
 import request from '../../utils/request'
+import ExportBtn from '../../components/ExportBtn.vue' // 核心织入引入
 
 const activeTab = ref('private')
 const tableData = ref([])
@@ -260,7 +261,6 @@ const submitFollow = () => {
     const payload = { lead_id: currentLeadId.value, ...followForm }
     const res = await request.post('/api/leads/follow/add', payload)
     
-    // 【核心拦截反馈层】：捕获 403 惩罚状态并展示
     if (res.code === 200) {
       ElMessage.success(res.msg)
       followDialogVisible.value = false
@@ -290,22 +290,6 @@ const isNearDrop = (trackTimeStr) => {
   const now = new Date().getTime()
   const diffDays = (now - trackTime) / (1000 * 3600 * 24)
   return diffDays > 12 
-}
-
-const exportData = async () => {
-  ElMessage.info('正在提取线索明细数据...')
-  const token = localStorage.getItem('saas_token')
-  try {
-    const res = await fetch(`http://47.120.52.65:8787/api/export/download?module=leads`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    const blob = await res.blob()
-    const a = document.createElement('a')
-    a.href = window.URL.createObjectURL(blob)
-    a.download = `招商线索数据池_${new Date().getTime()}.csv`
-    a.click()
-    ElMessage.success('线索导出成功，严禁外泄')
-  } catch (e) { ElMessage.error('导出通讯失败') }
 }
 
 onMounted(() => {
