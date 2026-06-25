@@ -136,9 +136,12 @@ Route::group('/api', function () {
     Route::post('/v1/decoration/delay', [app\controller\DecorationController::class, 'applyDelay']);
     
     Route::get('/v1/inventory/list', [app\controller\InventoryController::class, 'stockList']);
-    Route::get('/v1/inventory/logs', [app\controller\InventoryController::class, 'outLogs']);
+    // 【修复1】: 修正获取流水的控制器方法映射名为 logs
+    Route::get('/v1/inventory/logs', [app\controller\InventoryController::class, 'logs']); 
     Route::post('/v1/inventory/inbound', [app\controller\InventoryController::class, 'inbound']);
     Route::post('/v1/inventory/outbound', [app\controller\InventoryController::class, 'outbound']);
+    // 【修复2】: 补齐新建物料档案的路由注册
+    Route::post('/v1/inventory/add', [app\controller\InventoryController::class, 'add']); 
     
     Route::get('/v1/meeting/rooms/list', [app\controller\MeetingController::class, 'roomList']);
     Route::post('/v1/meeting/rooms/add', [app\controller\MeetingController::class, 'roomAdd']);
@@ -170,15 +173,15 @@ Route::group('/api', function () {
     Route::post('/tenant/meeting/apply', [app\controller\TenantPortalController::class, 'applyMeeting']);
 
     // ------------------------------------------
-    // 9. 基层员工/外勤师傅 H5 作业通道 (包含本次整合的完整接口)
+    // 9. 基层员工/外勤师傅 H5 作业通道 
     // ------------------------------------------
-    Route::post('/worker/work_order/report', [app\controller\WorkerPortalController::class, 'reportIssue']); // 隐患上报
+    Route::post('/worker/work_order/report', [app\controller\WorkerPortalController::class, 'reportIssue']); 
     Route::get('/worker/tasks', [app\controller\WorkerPortalController::class, 'getTasks']);
     Route::post('/worker/tasks/complete', [app\controller\WorkerPortalController::class, 'completeTask']);
     Route::get('/worker/patrol/points', [app\controller\WorkerPortalController::class, 'getPatrolPoints']);
     Route::post('/worker/patrol/submit', [app\controller\WorkerPortalController::class, 'submitPatrol']);
-    Route::get('/worker/patrol/records', [app\controller\WorkerPortalController::class, 'getPatrolRecords']); // 巡逻历史记录
-    Route::post('/worker/password/update', [app\controller\WorkerPortalController::class, 'updatePassword']); // 密码修改
+    Route::get('/worker/patrol/records', [app\controller\WorkerPortalController::class, 'getPatrolRecords']); 
+    Route::post('/worker/password/update', [app\controller\WorkerPortalController::class, 'updatePassword']); 
     Route::get('/worker/inventory', [app\controller\WorkerPortalController::class, 'getInventory']);
     Route::get('/worker/notifications', [app\controller\WorkerPortalController::class, 'getNotifications']);
     Route::post('/worker/notifications/read', [app\controller\WorkerPortalController::class, 'readNotification']);

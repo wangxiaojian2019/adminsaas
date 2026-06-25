@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class BaseModel extends Model
 {
     // 启用 Laravel 原生软删除机制 (依赖 deleted_at 字段)
-    // 启用后，所有的 Model::find() 或 Model::get() 会自动过滤掉 deleted_at 不为 null 的数据
     use SoftDeletes; 
 
     // 开启自动维护 created_at 和 updated_at
@@ -24,14 +23,24 @@ class BaseModel extends Model
      */
     protected static function booted()
     {
-        // 【核心防御】自动多租户隔离引擎
-        // 任何继承此类的模型在查询时，都会在 SQL 底层自动带上 WHERE tenant_id = ?
+        // 核心防御：自动多租户隔离引擎
         static::addGlobalScope('tenant_isolation', function (Builder $builder) {
-            // 从 Webman 的 request 上下文中安全提取当前租户 ID，默认防底线为 1
             $request = request();
-            $tenantId = $request ? ($request->tenantId ?? 1) : 1; 
             
-            // 自动追加查询条件，彻底杜绝数据越权穿透
+            // 场景 1：非 HTTP 环境 (如 CLI 定时任务/队列)，不强制隔离，或根据业务逻辑单独注入
+            if (!$request) {
+                return;
+            }
+
+            // 场景 2：HTTP 请求环境，执行严格隔离检查
+            $tenantId = $request->tenantId ?? null;
+
+            // 如果上下文中拿不到明确的租户 ID，直接抛出异常，触发系统阻断，严禁降级默认值
+            if (!$tenantId) {
+                throw new \Exception('核心底层防御触发：当前上下文丢失合法的租户凭证 (Tenant ID Missing)，已阻断数据库查询。');
+            }
+            
+            // 自动追加查询条件
             $builder->where($builder->getModel()->getTable() . '.tenant_id', $tenantId);
         });
     }

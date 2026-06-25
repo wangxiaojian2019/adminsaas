@@ -68,7 +68,7 @@
           <template #header>
             <div class="panel-header">
               <span><el-icon><Position /></el-icon> 后勤调度预警 (外勤工单流转阻断)</span>
-              <el-button type="primary" link @click="router.push('/services')">前往中控室派单 →</el-button>
+              <el-button type="primary" link @click="router.push('/workOrder')">前往中控室派单 →</el-button>
             </div>
           </template>
           <div v-if="dashboardData.urgent_orders && dashboardData.urgent_orders.length > 0">

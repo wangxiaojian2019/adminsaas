@@ -3,6 +3,7 @@ namespace app\controller;
 
 use support\Request;
 use support\Db;
+use support\Log;
 
 class TenantPortalController
 {
@@ -73,17 +74,17 @@ class TenantPortalController
                 'created_at' => date('Y-m-d H:i:s')
             ]);
 
-            // 将账单主表状态置为2(核销中)，防范前端重复提示支付
+            // 核心修复：移除原本不存在的 updated_at 字段，规避 1054 报错
             Db::table('receivables')->where('id', $billId)->update([
-                'is_paid' => 2, 
-                'updated_at' => date('Y-m-d H:i:s')
+                'is_paid' => 2
             ]);
 
             Db::commit();
             return json(['code' => 200, 'msg' => '凭证已安全上传，请等待财务对账核销']);
         } catch (\Exception $e) {
             Db::rollBack();
-            return json(['code' => 500, 'msg' => '流水写入异常']);
+            Log::error("流水写入异常: " . $e->getMessage());
+            return json(['code' => 500, 'msg' => '流水写入异常，已记录底层日志']);
         }
     }
 
@@ -103,9 +104,18 @@ class TenantPortalController
     {
         $enterpriseId = $request->enterprise_id;
         $enterprise = Db::table('enterprises')->where('id', $enterpriseId)->first();
-        if ($enterprise->password !== md5($request->post('old_password'))) return json(['code' => 400, 'msg' => '原密码不正确']);
+        
+        $oldPassword = $request->post('old_password');
+        $newPassword = $request->post('new_password');
+        
+        // 核心修复：兼容新旧两种加密方式验证，且剥离更新时的 updated_at
+        if ($enterprise->password !== md5($oldPassword) && !password_verify($oldPassword, $enterprise->password)) {
+            return json(['code' => 400, 'msg' => '原密码不正确']);
+        }
 
-        Db::table('enterprises')->where('id', $enterpriseId)->update(['password' => md5($request->post('new_password')), 'updated_at' => date('Y-m-d H:i:s')]);
+        Db::table('enterprises')->where('id', $enterpriseId)->update([
+            'password' => password_hash($newPassword, PASSWORD_BCRYPT)
+        ]);
         return json(['code' => 200, 'msg' => '密码更新成功']);
     }
 

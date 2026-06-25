@@ -13,5 +13,6 @@
  */
 
 return [
-    '' => support\exception\Handler::class,
+    // 覆盖默认的 Exception Handler，全面接管 API 异常输出
+    '' => app\exception\ApiHandler::class,
 ];

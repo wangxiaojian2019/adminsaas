@@ -3,6 +3,7 @@ namespace app\controller;
 
 use support\Request;
 use support\Db;
+use support\Log;
 
 class FinanceController
 {
@@ -92,20 +93,20 @@ class FinanceController
                     $isPaid = 0; 
                 }
 
+                // 核心修复：剥离不存在的 updated_at
                 Db::table('receivables')->where('id', $bill->id)->update([
                     'paid_amount' => $newPaid,
                     'is_paid' => $isPaid,
-                    'paid_time' => $isPaid == 1 ? date('Y-m-d H:i:s') : $bill->paid_time,
-                    'updated_at' => date('Y-m-d H:i:s')
+                    'paid_time' => $isPaid == 1 ? date('Y-m-d H:i:s') : $bill->paid_time
                 ]);
             } else {
                 // 驳回
                 $pendingCount = Db::table('payment_transactions')->where('receivable_id', $bill->id)->where('status', 0)->count();
                 if ($pendingCount == 0 && $bill->is_paid != 1) {
+                    // 核心修复：剥离不存在的 updated_at
                     Db::table('receivables')->where('id', $bill->id)->update([
                         'is_paid' => 3, // 3代表有流水被驳回且需重新上传
-                        'reject_reason' => $rejectReason,
-                        'updated_at' => date('Y-m-d H:i:s')
+                        'reject_reason' => $rejectReason
                     ]);
                 }
             }
@@ -114,6 +115,7 @@ class FinanceController
             return json(['code' => 200, 'msg' => '账务流水对账完毕，账单状态已自动同步']);
         } catch (\Exception $e) {
             Db::rollBack();
+            Log::error("后台财务审核流水异常: " . $e->getMessage());
             return json(['code' => 500, 'msg' => '核销失败：底层事务回滚']);
         }
     }
@@ -159,7 +161,7 @@ class FinanceController
         $query = Db::table('spaces')
             ->where('spaces.tenant_id', $tenantId)
             ->where('spaces.status', '>', 0)
-            ->where('spaces.is_deleted', 0) // 过滤软删除的物理空间
+            ->whereNull('spaces.deleted_at')
             ->leftJoin('contracts', function($join) {
                 $join->on('spaces.id', '=', 'contracts.space_id')
                      ->where('contracts.status', '=', 1);

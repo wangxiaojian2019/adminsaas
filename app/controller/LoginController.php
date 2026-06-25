@@ -3,6 +3,7 @@ namespace app\controller;
 
 use support\Request;
 use support\Db;
+use support\Log;
 use app\utils\JwtToken;
 
 class LoginController
@@ -17,18 +18,25 @@ class LoginController
         }
 
         $admin = Db::table('admins')->where('username', $username)->where('status', 1)->first();
-        if (!$admin || $admin->password !== md5($password)) {
+        if (!$admin) {
             return json(['code' => 401, 'msg' => '账号或密码错误，或该账号已被封禁']);
         }
 
-        // 容错处理：即使 admin 表没有 last_login_time 字段也不会崩溃
+        // 密码平滑升级逻辑：兼容旧 MD5，同时向原生 Hash 迁移
+        if ($admin->password === md5($password)) {
+            $newHash = password_hash($password, PASSWORD_BCRYPT);
+            Db::table('admins')->where('id', $admin->id)->update(['password' => $newHash]);
+        } elseif (!password_verify($password, $admin->password)) {
+            return json(['code' => 401, 'msg' => '账号或密码错误，或该账号已被封禁']);
+        }
+
         try {
             Db::table('admins')->where('id', $admin->id)->update([
                 'last_login_time' => date('Y-m-d H:i:s'),
                 'last_login_ip' => $request->getRealIp()
             ]);
         } catch (\Throwable $e) {
-            // 忽略字段不存在异常
+            Log::error("管理员 {$username} 登录更新时间失败: " . $e->getMessage());
         }
 
         $token = JwtToken::encode([
@@ -60,18 +68,25 @@ class LoginController
         }
 
         $enterprise = Db::table('enterprises')->where('phone', $phone)->first();
-        if (!$enterprise || $enterprise->password !== md5($password)) {
+        if (!$enterprise) {
             return json(['code' => 401, 'msg' => '手机号或密码错误']);
         }
 
-        // 容错处理：即使 enterprises 表没有 last_login_time 字段也不会崩溃
+        // 密码平滑升级逻辑
+        if ($enterprise->password === md5($password)) {
+            $newHash = password_hash($password, PASSWORD_BCRYPT);
+            Db::table('enterprises')->where('id', $enterprise->id)->update(['password' => $newHash]);
+        } elseif (!password_verify($password, $enterprise->password)) {
+            return json(['code' => 401, 'msg' => '手机号或密码错误']);
+        }
+
         try {
             Db::table('enterprises')->where('id', $enterprise->id)->update([
                 'last_login_time' => date('Y-m-d H:i:s'),
                 'last_login_ip' => $request->getRealIp()
             ]);
         } catch (\Throwable $e) {
-            // 忽略字段不存在异常
+            Log::error("企业账号 {$phone} 登录更新时间失败: " . $e->getMessage());
         }
 
         $token = JwtToken::encode([

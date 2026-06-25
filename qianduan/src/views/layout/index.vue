@@ -116,8 +116,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElNotification } from 'element-plus'
 import { 
   Odometer, OfficeBuilding, Wallet, Cpu, Calendar, 
   Avatar, Phone, DataAnalysis, Setting, Expand, ArrowDown
@@ -129,7 +130,86 @@ const router = useRouter()
 const activeMenu = computed(() => route.path)
 const currentRouteTitle = computed(() => route.meta.title || '工作台')
 
+// ==========================================
+// 全局 Websocket 引擎集成 (恢复弹窗提醒)
+// ==========================================
+let ws = null
+let reconnectTimer = null
+
+const initWebSocket = () => {
+  const token = localStorage.getItem('saas_token')
+  if (!token) return
+
+  // 从环境变量提取 API 基础地址，并将其转换为 ws:// 协议
+  const baseUrl = import.meta.env.VITE_BASE_API || 'http://47.120.52.65:8787'
+  const wsDomain = baseUrl.replace('http://', '').replace('https://', '').split(':')[0]
+  // Webman 配置文件中指定的 Websocket 端口是 8788
+  const wsUrl = `ws://${wsDomain}:8788`
+
+  ws = new WebSocket(wsUrl)
+
+  ws.onopen = () => {
+    // 建立连接后，第一时间发送 Token 进行身份鉴权绑定
+    ws.send(JSON.stringify({
+      type: 'auth',
+      token: token
+    }))
+  }
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      
+      // 捕获后端推送的各种业务预警
+      if (data.type === 'new_work_order') {
+        ElNotification({
+          title: '🚨 调度室预警：新工单',
+          message: data.content,
+          type: 'warning',
+          duration: 0 // 持续显示直到手动关闭
+        })
+      } else if (data.type === 'new_payment') {
+        ElNotification({
+          title: '💰 财务预警：租户已打款',
+          message: data.content,
+          type: 'success'
+        })
+      } else if (data.type === 'patrol_alert') {
+        ElNotification({
+          title: '⚠️ 安防预警：巡检异常',
+          message: data.content,
+          type: 'error',
+          duration: 0
+        })
+      }
+    } catch (e) {
+      console.error('WS 消息解析异常', e)
+    }
+  }
+
+  ws.onclose = () => {
+    // 断线重连机制 (每5秒尝试一次)
+    clearTimeout(reconnectTimer)
+    reconnectTimer = setTimeout(() => {
+      initWebSocket()
+    }, 5000)
+  }
+}
+
+onMounted(() => {
+  initWebSocket()
+})
+
+onBeforeUnmount(() => {
+  if (ws) {
+    ws.onclose = null // 屏蔽手动关闭时的重连逻辑
+    ws.close()
+  }
+  clearTimeout(reconnectTimer)
+})
+
 const handleLogout = () => {
+  if (ws) ws.close()
   localStorage.removeItem('saas_token')
   router.push('/login')
 }

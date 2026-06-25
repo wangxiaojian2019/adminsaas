@@ -36,6 +36,7 @@
               </el-form-item>
             </el-form>
             <div>
+              <el-button type="primary" plain @click="openNewItemDialog">新增物料档案</el-button>
               <el-button type="success" @click="openInboundDialog">采购入库 (计价)</el-button>
               <el-button type="warning" @click="openOutboundDialog">工单领料出库</el-button>
             </div>
@@ -76,6 +77,20 @@
       </el-tabs>
     </el-card>
 
+    <el-dialog title="新建物料档案 (SKU)" v-model="newItemVisible" width="500px">
+      <el-form :model="newItemForm" label-width="110px">
+        <el-form-item label="物料编码"><el-input v-model="newItemForm.sku_code" placeholder="如: WL-004" /></el-form-item>
+        <el-form-item label="物料名称"><el-input v-model="newItemForm.name" placeholder="如: 绝缘胶布" /></el-form-item>
+        <el-form-item label="物料分类"><el-input v-model="newItemForm.category" placeholder="如: 五金配件" /></el-form-item>
+        <el-form-item label="计量单位"><el-input v-model="newItemForm.unit" placeholder="如: 卷/件/个" /></el-form-item>
+        <el-form-item label="库存预警线"><el-input-number v-model="newItemForm.min_stock" :min="1" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="newItemVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitNewItem">确认建档</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog title="新增采购入库 (影响成本单价)" v-model="inboundVisible" width="550px">
       <el-form :model="inboundForm" label-width="120px">
         <el-form-item label="选择入库物料">
@@ -97,7 +112,7 @@
 
     <el-dialog title="外勤工单领料出库" v-model="outboundVisible" width="550px">
       <el-form :model="outboundForm" label-width="120px">
-        <el-form-item label="关联工单号"><el-input v-model="outboundForm.work_order_no" placeholder="如：WO20260601-002" /></el-form-item>
+        <el-form-item label="关联工单号"><el-input v-model="outboundForm.work_order_no" placeholder="如：WO20260601-002 (可选)" /></el-form-item>
         <el-form-item label="选择出库物料">
           <el-select v-model="outboundForm.sku_id" style="width: 100%">
             <el-option v-for="item in stockData" :key="item.id" :label="`${item.name} (库存: ${item.qty} ${item.unit})`" :value="item.id" />
@@ -117,19 +132,19 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import request from '@/utils/request' // 接入真实 API
+import request from '@/utils/request'
 
 const activeTab = ref('stock')
 const loading = ref(false)
 const inboundVisible = ref(false)
 const outboundVisible = ref(false)
+const newItemVisible = ref(false)
 const queryForm = ref({ keyword: '', category: '' })
 
 const stockData = ref([])
 const outboundLogs = ref([])
 const stats = ref({ totalValue: 0, warningCount: 0, monthCost: 0, monthInbound: 0 })
 
-// 真实接口：拉取大盘库存与面板统计
 const fetchStock = async () => {
   loading.value = true
   const res = await request.get('/api/v1/inventory/list', { params: queryForm.value })
@@ -140,7 +155,6 @@ const fetchStock = async () => {
   loading.value = false
 }
 
-// 真实接口：拉取出库流水
 const fetchLogs = async () => {
   const res = await request.get('/api/v1/inventory/logs')
   if (res.code === 200) outboundLogs.value = res.data
@@ -150,6 +164,24 @@ onMounted(() => {
   fetchStock()
   fetchLogs()
 })
+
+// 核心修复：提交新建物料
+const newItemForm = ref({ sku_code: '', name: '', category: '', unit: '', min_stock: 10 })
+const openNewItemDialog = () => {
+  newItemForm.value = { sku_code: '', name: '', category: '', unit: '', min_stock: 10 }
+  newItemVisible.value = true
+}
+const submitNewItem = async () => {
+  if (!newItemForm.value.sku_code || !newItemForm.value.name) return ElMessage.error('物料编码和名称必填')
+  const res = await request.post('/api/v1/inventory/add', newItemForm.value)
+  if (res.code === 200) {
+    ElMessage.success('物料建档成功')
+    newItemVisible.value = false
+    fetchStock()
+  } else {
+    ElMessage.error(res.msg || '建档失败')
+  }
+}
 
 const inboundForm = ref({ sku_id: null, qty: 10, price: 0 })
 const selectedSkuUnit = ref('')
@@ -172,14 +204,13 @@ const previewNewAvgPrice = computed(() => {
 
 const openInboundDialog = () => { inboundForm.value = { sku_id: null, qty: 10, price: 0 }; inboundVisible.value = true }
 
-// 真实接口：提交入库计算
 const submitInbound = async () => {
   if (!inboundForm.value.sku_id || inboundForm.value.qty <= 0) return ElMessage.error('入库参数错误')
   const res = await request.post('/api/v1/inventory/inbound', inboundForm.value)
   if (res.code === 200) {
     ElMessage.success(res.msg)
     inboundVisible.value = false
-    fetchStock() // 刷新大盘
+    fetchStock() 
   } else {
     ElMessage.error(res.msg)
   }
@@ -188,15 +219,14 @@ const submitInbound = async () => {
 const outboundForm = ref({ sku_id: null, qty: 1, work_order_no: '', worker: '' })
 const openOutboundDialog = () => { outboundForm.value = { sku_id: null, qty: 1, work_order_no: '', worker: '' }; outboundVisible.value = true }
 
-// 真实接口：提交领料出库
 const submitOutbound = async () => {
-  if (!outboundForm.value.sku_id || !outboundForm.value.work_order_no) return ElMessage.error('参数不完整')
+  if (!outboundForm.value.sku_id) return ElMessage.error('请选择出库物料')
   const res = await request.post('/api/v1/inventory/outbound', outboundForm.value)
   if (res.code === 200) {
     ElMessageBox.alert(res.msg, '业财联动执行结果', { type: 'success' })
     outboundVisible.value = false
-    fetchStock() // 刷新库存
-    fetchLogs()  // 刷新流水
+    fetchStock() 
+    fetchLogs()  
   } else {
     ElMessage.error(res.msg)
   }
