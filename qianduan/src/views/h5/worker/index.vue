@@ -106,16 +106,29 @@
     <div v-show="activeTab === 'patrol'" class="h5-content profile-wrapper" style="margin-top: -20px;">
       <div class="responsibility-card title-card" style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;"><span class="resp-title" style="margin:0;"><el-icon><Location /></el-icon> 安防网格巡视任务</span></div>
       <el-tabs v-model="patrolTab" class="h5-custom-tabs" @tab-change="handlePatrolTabChange">
+        
         <el-tab-pane label="待巡视防区" name="points">
           <div class="task-list" style="padding: 0;">
-            <el-empty v-if="patrolPoints.length === 0" description="暂无分配的巡更点" :image-size="80" />
-            <div v-for="point in patrolPoints" :key="point.id" class="task-card">
-              <div class="task-header"><span class="task-title">{{ point.name }}</span></div>
+            <el-empty v-if="patrolPoints.length === 0" description="当前时段暂无巡视任务" :image-size="80" />
+            
+            <div v-for="point in patrolPoints" :key="point.id" class="task-card" :style="{ opacity: point.is_actionable ? 1 : 0.6 }">
+              <div class="task-header">
+                <span class="task-title">{{ point.name }}</span>
+                <el-tag v-if="point.deadline_str" size="small" :type="point.is_actionable ? 'danger' : 'info'" effect="dark" style="font-weight: bold; border-radius: 12px; border: none;">
+                  <el-icon style="margin-right:2px;"><Timer /></el-icon> {{ point.deadline_str }}
+                </el-tag>
+              </div>
               <div class="task-body"><p><strong>物理位置：</strong>{{ point.location }}</p></div>
-              <div class="task-footer"><el-button type="primary" size="large" class="full-btn" icon="Aim" @click="openPatrolDialog(point)">现场扫码打卡</el-button></div>
+              <div class="task-footer">
+                <el-button :type="point.is_actionable ? 'primary' : 'info'" size="large" class="full-btn" icon="Aim" @click="openPatrolDialog(point)" :disabled="!point.is_actionable">
+                  {{ point.is_actionable ? '现场扫码打卡' : '未到时段 暂禁打卡' }}
+                </el-button>
+              </div>
             </div>
+
           </div>
         </el-tab-pane>
+
         <el-tab-pane label="我的打卡记录" name="records">
           <div class="task-list" style="padding: 0;">
             <el-empty v-if="patrolRecords.length === 0" description="暂无打卡历史" :image-size="80" />
@@ -334,7 +347,13 @@ const submitPatrol = async () => {
   submitLoading.value = true
   try {
     const res = await request.post('/api/worker/patrol/submit', patrolForm)
-    if (res.code === 200) { ElMessage.success('防区打卡成功'); patrolDialogVisible.value = false }
+    if (res.code === 200) { 
+        ElMessage.success('防区打卡成功'); 
+        patrolDialogVisible.value = false;
+        fetchPatrolPoints(); // 打卡成功后立马刷新点位列表让该点位消失
+    } else {
+        ElMessage.error(res.msg || '打卡异常');
+    }
   } finally { submitLoading.value = false }
 }
 const handleLogout = () => { localStorage.removeItem('h5_worker_token'); localStorage.removeItem('h5_worker_user'); router.push('/h5/login') }
@@ -378,7 +397,7 @@ onMounted(() => {
 .action-icon { font-size: 28px; }
 .task-list { padding: 0 15px; }
 .list-title { font-size: 15px; font-weight: bold; color: #303133; margin-bottom: 15px; border-left: 4px solid #409eff; padding-left: 8px; }
-.task-card { background: #fff; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #f0f2f5; }
+.task-card { background: #fff; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #f0f2f5; transition: opacity 0.3s;}
 .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f0f2f5; padding-bottom: 10px; }
 .task-title { font-weight: bold; font-size: 15px; color: #303133; }
 .task-body p { margin: 0 0 8px 0; font-size: 13px; color: #606266; line-height: 1.5; }

@@ -110,6 +110,11 @@ Route::group('/api', function () {
     // ------------------------------------------
     Route::get('/patrol/points/list', [app\controller\PatrolController::class, 'pointList']);
     Route::post('/patrol/points/add', [app\controller\PatrolController::class, 'pointAdd']);
+    
+    // 【修复新增】：补齐二次编辑和删除的路由映射！
+    Route::post('/patrol/points/update', [app\controller\PatrolController::class, 'pointUpdate']);
+    Route::post('/patrol/points/delete', [app\controller\PatrolController::class, 'pointDelete']);
+    
     Route::post('/patrol/checkin', [app\controller\PatrolController::class, 'checkin']);
     Route::get('/patrol/records', [app\controller\PatrolController::class, 'records']);
     
@@ -136,11 +141,9 @@ Route::group('/api', function () {
     Route::post('/v1/decoration/delay', [app\controller\DecorationController::class, 'applyDelay']);
     
     Route::get('/v1/inventory/list', [app\controller\InventoryController::class, 'stockList']);
-    // 【修复1】: 修正获取流水的控制器方法映射名为 logs
     Route::get('/v1/inventory/logs', [app\controller\InventoryController::class, 'logs']); 
     Route::post('/v1/inventory/inbound', [app\controller\InventoryController::class, 'inbound']);
     Route::post('/v1/inventory/outbound', [app\controller\InventoryController::class, 'outbound']);
-    // 【修复2】: 补齐新建物料档案的路由注册
     Route::post('/v1/inventory/add', [app\controller\InventoryController::class, 'add']); 
     
     Route::get('/v1/meeting/rooms/list', [app\controller\MeetingController::class, 'roomList']);

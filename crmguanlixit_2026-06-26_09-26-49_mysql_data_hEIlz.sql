@@ -850,8 +850,11 @@ CREATE TABLE `patrol_points` (
   `point_name` varchar(100) NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `location` varchar(100) NOT NULL COMMENT '巡检物理点位名称',
+  `task_type` varchar(50) DEFAULT 'security' COMMENT '任务类型(security安防/fire消防/hygiene卫生)',
+  `frequency` varchar(50) DEFAULT 'daily' COMMENT '巡检频次(daily每日/weekly每周/monthly每月)',
+  `time_slots` json DEFAULT NULL COMMENT '时间段配置 JSON 数组',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=104 DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB AUTO_INCREMENT=107 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -860,7 +863,7 @@ CREATE TABLE `patrol_points` (
 
 LOCK TABLES `patrol_points` WRITE;
 /*!40000 ALTER TABLE `patrol_points` DISABLE KEYS */;
-INSERT INTO `patrol_points` VALUES (101,1,'京东大厦 5F 顶层消防水箱防区','2026-01-10 10:00:00','京东大厦 5F 顶层消防水箱防区'),(102,1,'腾讯大厦 地下车库强电主控柜','2026-01-10 10:05:00','腾讯大厦 地下车库强电主控柜'),(103,1,'腾讯大厦909消防层消费设备','2026-06-16 19:32:51','腾讯大厦909消防层消费设备');
+INSERT INTO `patrol_points` VALUES (101,1,'京东大厦 5F 顶层消防水箱防区','2026-01-10 10:00:00','京东大厦 5F 顶层消防水箱防区','security','weekly','[{\"end\": \"12:00\", \"start\": \"10:00\"}]'),(102,1,'腾讯大厦 地下车库强电主控柜','2026-01-10 10:05:00','腾讯大厦 地下车库强电主控柜','security','daily',NULL),(103,1,'腾讯大厦909消防层消费设备','2026-06-16 19:32:51','腾讯大厦909消防层消费设备','security','daily','[{\"end\": \"10:00\", \"start\": \"08:00\"}]'),(104,1,'京东大厦7-8栋之间消防栓','2026-06-26 01:15:40','京东大厦7-8栋之间消防栓','fire','monthly','[{\"end\": \"10:00\", \"start\": \"08:00\"}]'),(105,1,'腾讯大厦楼顶水塔','2026-06-26 09:00:13','腾讯大厦楼顶水塔','security','weekly','[{\"end\": \"10:00\", \"start\": \"08:00\"}]'),(106,1,'测试的点位','2026-06-26 09:14:50','测试的点位','security','daily','[{\"end\": \"10:00\", \"start\": \"08:00\"}]');
 /*!40000 ALTER TABLE `patrol_points` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -881,8 +884,11 @@ CREATE TABLE `patrol_records` (
   `worker_id` int(11) NOT NULL DEFAULT '0' COMMENT '打卡员工ID',
   `image_url` varchar(255) DEFAULT '' COMMENT '打卡现场照片',
   `status` tinyint(1) NOT NULL DEFAULT '1' COMMENT '状态 1:正常 2:异常',
+  `location` varchar(255) DEFAULT NULL COMMENT '物理点位名称',
+  `worker_name` varchar(100) DEFAULT NULL COMMENT '打卡人姓名(PC端兼容)',
+  `remarks` varchar(500) DEFAULT NULL COMMENT '巡检情况备注(PC端兼容)',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -891,7 +897,7 @@ CREATE TABLE `patrol_records` (
 
 LOCK TABLES `patrol_records` WRITE;
 /*!40000 ALTER TABLE `patrol_records` DISABLE KEYS */;
-INSERT INTO `patrol_records` VALUES (1,101,'王五',1,'','2026-06-25 07:58:03',103,'/uploads/202606/20260625075752_c6bd10bfa80c550b.jpg',1),(2,101,'张三',1,'','2026-06-26 00:15:50',101,'/uploads/202606/20260626001549_f51918467ad17225.jpg',1);
+INSERT INTO `patrol_records` VALUES (1,101,'王五',1,'','2026-06-25 07:58:03',103,'/uploads/202606/20260625075752_c6bd10bfa80c550b.jpg',1,NULL,NULL,NULL),(2,101,'张三',1,'','2026-06-26 00:15:50',101,'/uploads/202606/20260626001549_f51918467ad17225.jpg',1,NULL,NULL,NULL),(3,101,'张三',1,'','2026-06-26 01:16:02',101,'/uploads/202606/20260626011601_60e0034418ebe57f.jpg',1,NULL,NULL,NULL),(4,101,'张三',1,'','2026-06-26 08:50:03',101,'/uploads/202606/20260626085002_d497cca12789292d.jpg',1,NULL,NULL,NULL),(5,105,'张三',1,'','2026-06-26 09:03:54',101,'/uploads/202606/20260626090044_cffaa2b96040ee18.jpg',1,'腾讯大厦楼顶水塔','张三','');
 /*!40000 ALTER TABLE `patrol_records` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1281,4 +1287,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-26  0:55:48
+-- Dump completed on 2026-06-26  9:26:49
